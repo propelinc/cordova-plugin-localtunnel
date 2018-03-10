@@ -112,8 +112,7 @@
 
         strWindowFeatures = strWindowFeatures || '';
 
-        var strCaptchaOptions = JSON.Stringify(captcha);
-
+        var strCaptchaOptions = JSON.Stringify(captcha || '{}');
         exec(cb, cb, 'InAppBrowser', 'open', [strUrl, strWindowName, strWindowFeatures, strCaptchaOptions]);
         return iab;
     };
