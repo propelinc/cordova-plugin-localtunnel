@@ -36,7 +36,8 @@
             'loadstart': channel.create('loadstart'),
             'loadstop': channel.create('loadstop'),
             'loaderror': channel.create('loaderror'),
-            'exit': channel.create('exit')
+            'exit': channel.create('exit'),
+            'loadresource': channel.create('loadresource')
         };
     }
 
@@ -45,6 +46,9 @@
             if (event && (event.type in this.channels)) {
                 this.channels[event.type].fire(event);
             }
+        },
+        getAllCookies: function (url, success, error) {
+            exec(success, error, 'InAppBrowser', 'getAllCookies', [url]);
         },
         close: function (eventname) {
             exec(null, null, 'InAppBrowser', 'close', []);
@@ -87,7 +91,7 @@
         }
     };
 
-    module.exports = function (strUrl, strWindowName, strWindowFeatures, callbacks) {
+    module.exports = function (strUrl, strWindowName, strWindowFeatures, callbacks, captcha) {
         // Don't catch calls that write to existing frames (e.g. named iframes).
         if (window.frames && window.frames[strWindowName]) {
             var origOpenFunc = modulemapper.getOriginalSymbol(window, 'open');
@@ -108,7 +112,9 @@
 
         strWindowFeatures = strWindowFeatures || '';
 
-        exec(cb, cb, 'InAppBrowser', 'open', [strUrl, strWindowName, strWindowFeatures]);
+        var strCaptchaOptions = JSON.Stringify(captcha);
+
+        exec(cb, cb, 'InAppBrowser', 'open', [strUrl, strWindowName, strWindowFeatures, strCaptchaOptions]);
         return iab;
     };
 })();
