@@ -238,7 +238,7 @@ public class InAppBrowser extends CordovaPlugin {
                             String content = captchaOptions.getString("content");
                             result = showCaptchaPage(url, features, content, captchaCookies);
                         } catch (JSONException ex) {
-                            LOG.d(LOG_TAG, "Should never happen");
+                            LOG.e(LOG_TAG, "Should never happen", ex);
                         }
                     }
                     // BLANK - or anything else
