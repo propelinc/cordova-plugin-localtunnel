@@ -238,7 +238,8 @@ public class InAppBrowser extends CordovaPlugin {
                             org.json.JSONObject captchaOptions = new org.json.JSONObject(captchaOptionsJson);
                             org.json.JSONObject captchaCookies = captchaOptions.getJSONObject("cookies");
                             String content = captchaOptions.getString("content");
-                            result = showCaptchaPage(url, features, content, captchaCookies);
+                            String userAgent = captchaOptions.getString("useragent");
+                            result = showCaptchaPage(url, features, content, userAgent, captchaCookies);
                         } catch (JSONException ex) {
                             LOG.e(LOG_TAG, "Should never happen", ex);
                         }
@@ -1054,7 +1055,7 @@ public class InAppBrowser extends CordovaPlugin {
      * @param url the url to load.
      * @param features jsonObject
      */
-    public String showCaptchaPage(final String url, HashMap<String, String> features, final String content, final org.json.JSONObject captchaCookies) {
+    public String showCaptchaPage(final String url, HashMap<String, String> features, final String content, final String userAgent, final org.json.JSONObject captchaCookies) {
         final CordovaWebView thatWebView = this.webView;
         captchaUrl = url;
 
@@ -1101,24 +1102,10 @@ public class InAppBrowser extends CordovaPlugin {
                 settings.setJavaScriptCanOpenWindowsAutomatically(true);
                 settings.setBuiltInZoomControls(showZoomControls);
                 settings.setPluginState(android.webkit.WebSettings.PluginState.ON);
+                settings.setUserAgentString(userAgent);
 
                 if(android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.JELLY_BEAN_MR1) {
                     settings.setMediaPlaybackRequiresUserGesture(mediaPlaybackRequiresUserGesture);
-                }
-
-                if (url.contains("ebtpr.com")) {
-                    //Force set User Agent to look like MSIE
-                    settings.setUserAgentString("Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)");
-                }
-
-                String overrideUserAgent = preferences.getString("OverrideUserAgent", null);
-                String appendUserAgent = preferences.getString("AppendUserAgent", null);
-
-                if (overrideUserAgent != null) {
-                    settings.setUserAgentString(overrideUserAgent);
-                }
-                if (appendUserAgent != null) {
-                    settings.setUserAgentString(settings.getUserAgentString() + appendUserAgent);
                 }
 
                 //Toggle whether this is enabled or not!
