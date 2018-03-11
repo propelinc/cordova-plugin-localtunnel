@@ -1275,11 +1275,15 @@ public class InAppBrowser extends CordovaPlugin {
         public boolean shouldOverrideUrlLoading(WebView webView, String url) {
             LOG.d("LOADING_RESOURCE", "shouldOverrideUrlLoading: " + url);
             if (url == "about:blank") {
-                JSONObject obj = new JSONObject();
-                obj.put("type", CAPTCHA_DONE_EVENT);
-                // Put cookies for connectebt.com domain here!
-                obj.put("url", url);
-                sendUpdate(obj, true);
+                try {
+                    JSONObject obj = new JSONObject();
+                    obj.put("type", CAPTCHA_DONE_EVENT);
+                    // Put cookies for connectebt.com domain here!
+                    obj.put("url", url);
+                    sendUpdate(obj, true);
+                } catch (JSONException ex) {
+                    LOG.e(LOG_TAG, "URI passed in has caused a JSON error.");
+                }
                 closeDialog();
                 return true;
             }
