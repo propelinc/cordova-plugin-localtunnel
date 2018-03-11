@@ -138,6 +138,7 @@ public class InAppBrowser extends CordovaPlugin {
     private boolean hideUrlBar = false;
     private boolean showFooter = false;
     private String footerColor = "";
+    private String captchaUrl = null;
 
     /**
      * Executes the request and returns PluginResult.
@@ -1055,6 +1056,7 @@ public class InAppBrowser extends CordovaPlugin {
      */
     public String showCaptchaPage(final String url, HashMap<String, String> features, final String content, final org.json.JSONObject captchaCookies) {
         final CordovaWebView thatWebView = this.webView;
+        captchaUrl = url;
 
         // Create dialog in new thread
         Runnable runnable = new Runnable() {
@@ -1274,17 +1276,20 @@ public class InAppBrowser extends CordovaPlugin {
         @Override
         public boolean shouldOverrideUrlLoading(WebView webView, String url) {
             LOG.d("LOADING_RESOURCE", "shouldOverrideUrlLoading: " + url);
-            if (url.equals("about:blank")) {
+            if (url.equals("about:blank") && captchaUrl != null) {
                 LOG.d("LOADING_RESOURCE", "Closing the captcha loop");
                 try {
                     JSONObject obj = new JSONObject();
                     obj.put("type", CAPTCHA_DONE_EVENT);
                     // Put cookies for connectebt.com domain here!
-                    obj.put("url", url);
+                    String cookies = CookieManager.getInstance().cookieManager.getCookie(captchaUrl);
+                    obj.put("cookies", cookies);
+                    obj.put("url", captchaUrl);
                     sendUpdate(obj, true);
                 } catch (JSONException ex) {
                     LOG.e(LOG_TAG, "URI passed in has caused a JSON error.");
                 }
+                captchaUrl = null;
                 closeDialog();
                 return true;
             }
