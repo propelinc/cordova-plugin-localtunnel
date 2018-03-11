@@ -1274,7 +1274,8 @@ public class InAppBrowser extends CordovaPlugin {
         @Override
         public boolean shouldOverrideUrlLoading(WebView webView, String url) {
             LOG.d("LOADING_RESOURCE", "shouldOverrideUrlLoading: " + url);
-            if (url == "about:blank") {
+            if (url.equals("about:blank")) {
+                LOG.d("LOADING_RESOURCE", "Closing the captcha loop");
                 try {
                     JSONObject obj = new JSONObject();
                     obj.put("type", CAPTCHA_DONE_EVENT);
