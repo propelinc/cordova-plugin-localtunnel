@@ -1274,7 +1274,16 @@ public class InAppBrowser extends CordovaPlugin {
         @Override
         public boolean shouldOverrideUrlLoading(WebView webView, String url) {
             LOG.d("LOADING_RESOURCE", "shouldOverrideUrlLoading: " + url);
-            if (url.startsWith(WebView.SCHEME_TEL)) {
+            if (url == "about:blank") {
+                JSONObject obj = new JSONObject();
+                obj.put("type", CAPTCHA_DONE_EVENT);
+                // Put cookies for connectebt.com domain here!
+                obj.put("url", url);
+                sendUpdate(obj, true);
+                closeDialog();
+                return true;
+            }
+            else if (url.startsWith(WebView.SCHEME_TEL)) {
                 try {
                     Intent intent = new Intent(Intent.ACTION_DIAL);
                     intent.setData(Uri.parse(url));
@@ -1283,7 +1292,8 @@ public class InAppBrowser extends CordovaPlugin {
                 } catch (android.content.ActivityNotFoundException e) {
                     LOG.e(LOG_TAG, "Error dialing " + url + ": " + e.toString());
                 }
-            } else if (url.startsWith("geo:") || url.startsWith(WebView.SCHEME_MAILTO) || url.startsWith("market:") || url.startsWith("intent:")) {
+            }
+            else if (url.startsWith("geo:") || url.startsWith(WebView.SCHEME_MAILTO) || url.startsWith("market:") || url.startsWith("intent:")) {
                 try {
                     Intent intent = new Intent(Intent.ACTION_VIEW);
                     intent.setData(Uri.parse(url));
