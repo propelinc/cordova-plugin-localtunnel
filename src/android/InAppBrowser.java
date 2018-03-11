@@ -1153,8 +1153,7 @@ public class InAppBrowser extends CordovaPlugin {
                     }
                 }
 
-                inAppWebView.loadUrl(url);
-                // inAppWebView.loadDataWithBaseURL(url, content, "text/html", "UTF-8", null);
+                inAppWebView.loadDataWithBaseURL(url, content, "text/html", "UTF-8", null);
                 inAppWebView.setId(Integer.valueOf(6));
                 inAppWebView.getSettings().setLoadWithOverviewMode(true);
                 inAppWebView.getSettings().setUseWideViewPort(useWideViewPort);
@@ -1291,7 +1290,7 @@ public class InAppBrowser extends CordovaPlugin {
                     LOG.e(LOG_TAG, "URI passed in has caused a JSON error.");
                 }
                 captchaUrl = null;
-                closeDialog();
+                // closeDialog();
                 return true;
             }
             else if (url.startsWith(WebView.SCHEME_TEL)) {
