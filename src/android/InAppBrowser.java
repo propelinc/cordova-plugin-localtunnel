@@ -1153,7 +1153,8 @@ public class InAppBrowser extends CordovaPlugin {
                     }
                 }
 
-                inAppWebView.loadDataWithBaseURL(url, content, "text/html", "UTF-8", null);
+                inAppWebView.loadUrl(url);
+                // inAppWebView.loadDataWithBaseURL(url, content, "text/html", "UTF-8", null);
                 inAppWebView.setId(Integer.valueOf(6));
                 inAppWebView.getSettings().setLoadWithOverviewMode(true);
                 inAppWebView.getSettings().setUseWideViewPort(useWideViewPort);
