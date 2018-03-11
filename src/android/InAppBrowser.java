@@ -1282,7 +1282,7 @@ public class InAppBrowser extends CordovaPlugin {
                     JSONObject obj = new JSONObject();
                     obj.put("type", CAPTCHA_DONE_EVENT);
                     // Put cookies for connectebt.com domain here!
-                    String cookies = CookieManager.getInstance().cookieManager.getCookie(captchaUrl);
+                    String cookies = CookieManager.getInstance().getCookie(captchaUrl);
                     obj.put("cookies", cookies);
                     obj.put("url", captchaUrl);
                     sendUpdate(obj, true);
