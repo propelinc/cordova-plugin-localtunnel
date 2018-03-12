@@ -24,6 +24,7 @@
 #define    kInAppBrowserTargetSelf @"_self"
 #define    kInAppBrowserTargetSystem @"_system"
 #define    kInAppBrowserTargetBlank @"_blank"
+#define    kInAppBrowserTargetCaptcha @"_captcha"
 
 #define    kInAppBrowserToolbarBarPositionBottom @"bottom"
 #define    kInAppBrowserToolbarBarPositionTop @"top"
@@ -70,11 +71,10 @@
 
 - (BOOL) isSystemUrl:(NSURL*)url
 {
-	if ([[url host] isEqualToString:@"itunes.apple.com"]) {
-		return YES;
-	}
-
-	return NO;
+    if ([[url host] isEqualToString:@"itunes.apple.com"]) {
+        return YES;
+    }
+    return NO;
 }
 
 - (void)open:(CDVInvokedUrlCommand*)command
@@ -103,6 +103,13 @@
             [self openInCordovaWebView:absoluteUrl withOptions:options];
         } else if ([target isEqualToString:kInAppBrowserTargetSystem]) {
             [self openInSystem:absoluteUrl];
+        } else if ([target isEqualToString:kInAppBrowserTargetCaptcha]) {
+            NSString* captchaJson = [command argumentAtIndex:3 withDefault:@"" andClass:[NSString class]];
+            NSData* captchaJsonData = [captchaJson dataUsingEncoding:NSUTF8StringEncoding];
+            NSError *error = nil;
+            id captchaObj = [NSJSONSerialization JSONObjectWithData:captchaJsonData options:0 error:&error];
+            NSDictionary *captcha = captchaObj;
+            [self openCaptchaInInAppBrowser:absoluteUrl withOptions:options withCaptcha:captcha];
         } else { // _blank or anything else
             [self openInInAppBrowser:absoluteUrl withOptions:options];
         }
@@ -220,6 +227,96 @@
     }
 }
 
+
+- (void)openCaptchaInInAppBrowser:(NSURL*)url withOptions:(NSString*)options withCaptcha:captcha
+{
+    CDVInAppBrowserOptions* browserOptions = [CDVInAppBrowserOptions parseOptions:options];
+
+    NSDictionary* captchaCookies = [captcha objectForKey:@"cookies"];
+    NSString* content = [captcha objectForKey:@"content"];
+    NSString* userAgent = [captcha objectForKey:@"useragent"];
+    self.captchaUrl = url;
+    self.captchaUrlCount = 0;
+
+    NSHTTPCookie *cookie;
+    NSHTTPCookieStorage *storage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
+    for (cookie in [storage cookies])
+    {
+        if (![cookie.domain isEqual: @".^filecookies^"]) {
+            [storage deleteCookie:cookie];
+        }
+    }
+
+    for(id cookieName in captchaCookies) {
+        id cookieValue = [captchaCookies objectForKey:cookieName];
+        NSMutableDictionary *cookieProperties = [NSMutableDictionary dictionary];
+        [cookieProperties setObject:cookieName forKey:NSHTTPCookieName];
+        [cookieProperties setObject:cookieValue forKey:NSHTTPCookieValue];
+        [cookieProperties setObject:url forKey:NSHTTPCookieOriginURL];
+        [cookieProperties setObject:@"/" forKey:NSHTTPCookiePath];
+        cookie = [NSHTTPCookie cookieWithProperties:cookieProperties];
+        [storage setCookie:cookie];
+    }
+
+    if (self.inAppBrowserViewController == nil) {
+        self.inAppBrowserViewController = [[CDVInAppBrowserViewController alloc] initWithUserAgent:userAgent prevUserAgent:[self.commandDelegate userAgent] browserOptions: browserOptions];
+        self.inAppBrowserViewController.navigationDelegate = self;
+
+        if ([self.viewController conformsToProtocol:@protocol(CDVScreenOrientationDelegate)]) {
+            self.inAppBrowserViewController.orientationDelegate = (UIViewController <CDVScreenOrientationDelegate>*)self.viewController;
+        }
+    }
+
+    // Set Presentation Style
+    UIModalPresentationStyle presentationStyle = UIModalPresentationFullScreen; // default
+    if (browserOptions.presentationstyle != nil) {
+        if ([[browserOptions.presentationstyle lowercaseString] isEqualToString:@"pagesheet"]) {
+            presentationStyle = UIModalPresentationPageSheet;
+        } else if ([[browserOptions.presentationstyle lowercaseString] isEqualToString:@"formsheet"]) {
+            presentationStyle = UIModalPresentationFormSheet;
+        }
+    }
+    self.inAppBrowserViewController.modalPresentationStyle = presentationStyle;
+
+    // Set Transition Style
+    UIModalTransitionStyle transitionStyle = UIModalTransitionStyleCoverVertical; // default
+    if (browserOptions.transitionstyle != nil) {
+        if ([[browserOptions.transitionstyle lowercaseString] isEqualToString:@"fliphorizontal"]) {
+            transitionStyle = UIModalTransitionStyleFlipHorizontal;
+        } else if ([[browserOptions.transitionstyle lowercaseString] isEqualToString:@"crossdissolve"]) {
+            transitionStyle = UIModalTransitionStyleCrossDissolve;
+        }
+    }
+    self.inAppBrowserViewController.modalTransitionStyle = transitionStyle;
+
+    // prevent webView from bouncing
+    if (browserOptions.disallowoverscroll) {
+        if ([self.inAppBrowserViewController.webView respondsToSelector:@selector(scrollView)]) {
+            ((UIScrollView*)[self.inAppBrowserViewController.webView scrollView]).bounces = NO;
+        } else {
+            for (id subview in self.inAppBrowserViewController.webView.subviews) {
+                if ([[subview class] isSubclassOfClass:[UIScrollView class]]) {
+                    ((UIScrollView*)subview).bounces = NO;
+                }
+            }
+        }
+    }
+
+    // UIWebView options
+    self.inAppBrowserViewController.webView.scalesPageToFit = browserOptions.enableviewportscale;
+    self.inAppBrowserViewController.webView.mediaPlaybackRequiresUserAction = browserOptions.mediaplaybackrequiresuseraction;
+    self.inAppBrowserViewController.webView.allowsInlineMediaPlayback = browserOptions.allowinlinemediaplayback;
+    if (IsAtLeastiOSVersion(@"6.0")) {
+        self.inAppBrowserViewController.webView.keyboardDisplayRequiresUserAction = browserOptions.keyboarddisplayrequiresuseraction;
+        self.inAppBrowserViewController.webView.suppressesIncrementalRendering = browserOptions.suppressesincrementalrendering;
+    }
+
+    [self.inAppBrowserViewController navigateToCaptcha:url :content];
+    if (!browserOptions.hidden) {
+        [self show:nil];
+    }
+}
+
 - (void)show:(CDVInvokedUrlCommand*)command
 {
     if (self.inAppBrowserViewController == nil) {
@@ -234,7 +331,7 @@
     _previousStatusBarStyle = [UIApplication sharedApplication].statusBarStyle;
 
     __block CDVInAppBrowserNavigationController* nav = [[CDVInAppBrowserNavigationController alloc]
-                                   initWithRootViewController:self.inAppBrowserViewController];
+                                                        initWithRootViewController:self.inAppBrowserViewController];
     nav.orientationDelegate = self.inAppBrowserViewController;
     nav.navigationBarHidden = YES;
     nav.modalPresentationStyle = self.inAppBrowserViewController.modalPresentationStyle;
@@ -413,6 +510,22 @@
     NSURL* url = request.URL;
     BOOL isTopLevelNavigation = [request.URL isEqual:[request mainDocumentURL]];
 
+    NSLog(@"---- LOADING RESOURCE %@", url);
+    if ([url isEqual:self.captchaUrl]) {
+        if (self.captchaUrlCount++ > 0) {
+            NSArray* cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:self.captchaUrl];
+            NSDictionary* cookieHeader = [NSHTTPCookie requestHeaderFieldsWithCookies:cookies];
+            NSString* cookieStr = [cookieHeader objectForKey:@"Cookie"];
+            CDVPluginResult* pluginResult = [
+                CDVPluginResult resultWithStatus:CDVCommandStatus_OK
+                messageAsDictionary:@{@"type":@"captchadone", @"url":[url absoluteString], @"cookies":cookieStr}];
+
+            [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
+            [self.commandDelegate sendPluginResult:pluginResult callbackId:self.callbackId];
+            return NO;
+        }
+    }
+
     // See if the url uses the 'gap-iab' protocol. If so, the host should be the id of a callback to execute,
     // and the path, if present, should be a JSON-encoded value to pass to the callback.
     if ([[url scheme] isEqualToString:@"gap-iab"]) {
@@ -538,7 +651,7 @@
 
 // Prevent crashes on closing windows
 -(void)dealloc {
-   self.webView.delegate = nil;
+    self.webView.delegate = nil;
 }
 
 - (void)createViews
@@ -605,10 +718,10 @@
     self.toolbar.opaque = NO;
     self.toolbar.userInteractionEnabled = YES;
     if (_browserOptions.toolbarcolor != nil) { // Set toolbar color if user sets it in options
-      self.toolbar.barTintColor = [self colorFromHexString:_browserOptions.toolbarcolor];
+        self.toolbar.barTintColor = [self colorFromHexString:_browserOptions.toolbarcolor];
     }
     if (!_browserOptions.toolbartranslucent) { // Set toolbar translucent to no if user sets it in options
-      self.toolbar.translucent = NO;
+        self.toolbar.translucent = NO;
     }
 
     CGFloat labelInset = 5.0;
@@ -655,9 +768,9 @@
 
     // Filter out Navigation Buttons if user requests so
     if (_browserOptions.hidenavigationbuttons) {
-      [self.toolbar setItems:@[self.closeButton, flexibleSpaceButton]];
+        [self.toolbar setItems:@[self.closeButton, flexibleSpaceButton]];
     } else {
-      [self.toolbar setItems:@[self.closeButton, flexibleSpaceButton, self.backButton, fixedSpaceButton, self.forwardButton]];
+        [self.toolbar setItems:@[self.closeButton, flexibleSpaceButton, self.backButton, fixedSpaceButton, self.forwardButton]];
     }
     [self.toolbar setItems:@[self.closeButton, flexibleSpaceButton]];
 
@@ -840,6 +953,20 @@
             [[weakSelf parentViewController] dismissViewControllerAnimated:YES completion:nil];
         }
     });
+}
+
+- (void)navigateToCaptcha:(NSURL*)url :(NSString*)content
+{
+    if (_userAgentLockToken != 0) {
+        [self.webView loadHTMLString :content baseURL:url];
+    } else {
+        __weak CDVInAppBrowserViewController* weakSelf = self;
+        [CDVUserAgentUtil acquireLock:^(NSInteger lockToken) {
+            _userAgentLockToken = lockToken;
+            [CDVUserAgentUtil setUserAgent:_userAgent lockToken:lockToken];
+            [weakSelf.webView loadHTMLString:content baseURL:url];
+        }];
+    }
 }
 
 - (void)navigateTo:(NSURL*)url

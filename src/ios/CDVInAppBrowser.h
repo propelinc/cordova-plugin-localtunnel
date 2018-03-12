@@ -35,6 +35,8 @@
 @property (nonatomic, retain) CDVInAppBrowserViewController* inAppBrowserViewController;
 @property (nonatomic, copy) NSString* callbackId;
 @property (nonatomic, copy) NSRegularExpression *callbackIdPattern;
+@property (nonatomic, copy) NSURL* captchaUrl;
+@property (nonatomic, assign) int captchaUrlCount;
 
 - (void)open:(CDVInvokedUrlCommand*)command;
 - (void)close:(CDVInvokedUrlCommand*)command;
@@ -101,6 +103,7 @@
 
 - (void)close;
 - (void)navigateTo:(NSURL*)url;
+- (void)navigateToCaptcha:(NSURL*)url :(NSString*)content;
 - (void)showLocationBar:(BOOL)show;
 - (void)showToolBar:(BOOL)show : (NSString *) toolbarPosition;
 - (void)setCloseButtonTitle:(NSString*)title : (NSString*) colorString;
