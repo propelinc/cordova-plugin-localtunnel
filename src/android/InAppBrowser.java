@@ -1100,7 +1100,7 @@ public class InAppBrowser extends CordovaPlugin {
                 WebSettings settings = inAppWebView.getSettings();
                 settings.setJavaScriptEnabled(true);
                 settings.setJavaScriptCanOpenWindowsAutomatically(true);
-                settings.setBuiltInZoomControls(showZoomControls);
+                settings.setBuiltInZoomControls(false);
                 settings.setPluginState(android.webkit.WebSettings.PluginState.ON);
                 settings.setUserAgentString(userAgent);
 
@@ -1119,11 +1119,8 @@ public class InAppBrowser extends CordovaPlugin {
                 settings.setDomStorageEnabled(true);
 
                 CookieManager cookieManager = CookieManager.getInstance();
-                if (clearAllCache) {
-                    cookieManager.removeAllCookie();
-                } else if (clearSessionCache) {
-                    cookieManager.removeSessionCookie();
-                }
+                cookieManager.removeAllCookie();
+                cookieManager.removeSessionCookie();
 
                 // Enable Thirdparty Cookies on >=Android 5.0 device
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {

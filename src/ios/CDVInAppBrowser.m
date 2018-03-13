@@ -230,7 +230,7 @@
 
 - (void)openCaptchaInInAppBrowser:(NSURL*)url withOptions:(NSString*)options withCaptcha:captcha
 {
-    CDVInAppBrowserOptions* browserOptions = [CDVInAppBrowserOptions parseOptions:options];
+    CDVInAppBrowserOptions* browserOptions = [CDVInAppBrowserOptions parseOptions:"location=no,toolbar=no"];
 
     NSDictionary* captchaCookies = [captcha objectForKey:@"cookies"];
     NSString* content = [captcha objectForKey:@"content"];
