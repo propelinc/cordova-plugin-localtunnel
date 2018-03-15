@@ -1377,7 +1377,15 @@ public class InAppBrowser extends CordovaPlugin {
                             LOG.e(LOG_TAG, "Should never happen", ex);
                         }
                     }
-                    String postData = postDataList.stream().collect(Collectors.joining("&"));
+
+                    String postData = "";
+                    for (String str : postDataList) {
+                        if (postData != "") {
+                            postData += "&";
+                        }
+                        postData += str;
+                    }
+                    LOG.e(LOG_TAG, "JOINED URL STRING: " + postData);
                     inAppWebView.postUrl(url, postData.getBytes());
                 }
 
