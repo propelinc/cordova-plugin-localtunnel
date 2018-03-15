@@ -1489,7 +1489,7 @@ public class InAppBrowser extends CordovaPlugin {
         @Override
         public boolean shouldOverrideUrlLoading(WebView webView, String url) {
             LOG.d("LOADING_RESOURCE", "shouldOverrideUrlLoading: " + url);
-            if (url.equals("about:blank") && captchaUrl != null) {
+            if (url.equals(captchaUrl) && captchaUrl != null) {
                 LOG.d("LOADING_RESOURCE", "Closing the captcha loop");
                 try {
                     JSONObject obj = new JSONObject();
@@ -1640,6 +1640,7 @@ public class InAppBrowser extends CordovaPlugin {
                 } catch (JSONException ex) {
                     LOG.e(LOG_TAG, "Should never happen", ex);
                 }
+                requestUrl = null;
             }
 
             // https://issues.apache.org/jira/browse/CB-11248
