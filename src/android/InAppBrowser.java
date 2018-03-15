@@ -278,7 +278,7 @@ public class InAppBrowser extends CordovaPlugin {
                         }
                     }
                     else if (HTTP_REQUEST.equals(target)) {
-                        LOG.d(LOG_TAG, "Making http GET request in InAppBrowser");
+                        LOG.d(LOG_TAG, "Making http request in InAppBrowser");
                         try {
                             org.json.JSONObject requestOptions = new org.json.JSONObject(captchaOptionsJson);
                             org.json.JSONObject requestParams = requestOptions.getJSONObject("params");
