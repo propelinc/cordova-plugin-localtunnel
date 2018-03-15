@@ -95,6 +95,7 @@ public class InAppBrowser extends CordovaPlugin {
     private static final String SYSTEM = "_system";
     private static final String CAPTCHA = "_captcha";
     private static final String HTTP_REQUEST = "_httprequest";
+    private static final String CLEAR_COOKIES = "_clearCookies";
     private static final String EXIT_EVENT = "exit";
     private static final String LOCATION = "location";
     private static final String ZOOM = "zoom";
@@ -288,6 +289,11 @@ public class InAppBrowser extends CordovaPlugin {
                         } catch (JSONException ex) {
                             LOG.e(LOG_TAG, "Should never happen", ex);
                         }
+                    }
+                    else if (CLEAR_COOKIES.equals(target)) {
+                        LOG.d(LOG_TAG, "Clearing cookies");
+                        CookieManager.getInstance().removeAllCookie();
+                        result = "success";
                     }
                     // BLANK - or anything else
                     else {
