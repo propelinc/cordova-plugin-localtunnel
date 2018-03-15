@@ -74,13 +74,17 @@ import org.json.JSONArray;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.io.UnsupportedEncodingException;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.net.MalformedURLException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.StringTokenizer;
+import java.util.stream.Collectors;
 
 @SuppressLint("SetJavaScriptEnabled")
 public class InAppBrowser extends CordovaPlugin {
@@ -276,8 +280,8 @@ public class InAppBrowser extends CordovaPlugin {
                         LOG.d(LOG_TAG, "Making http GET request in InAppBrowser");
                         try {
                             org.json.JSONObject requestOptions = new org.json.JSONObject(captchaOptionsJson);
-                            org.json.JSONObject requestCookies = requestOptions.getJSONObject("cookies");
                             org.json.JSONObject requestParams = requestOptions.getJSONObject("params");
+                            String requestCookies = requestOptions.getString("cookies");
                             String method = requestOptions.getString("method");
                             String userAgent = requestOptions.getString("useragent");
                             result = makeHttpRequest(url, features, method, userAgent, requestCookies, requestParams);
@@ -1240,7 +1244,7 @@ public class InAppBrowser extends CordovaPlugin {
             HashMap<String, String> features,
             final String method,
             final String userAgent,
-            final org.json.JSONObject requestCookies,
+            final String requestCookies,
             final org.json.JSONObject requestParams) {
 
         final CordovaWebView thatWebView = this.webView;
@@ -1286,25 +1290,7 @@ public class InAppBrowser extends CordovaPlugin {
                     inAppWebView.setId(Integer.valueOf(6));
 
                     LOG.e("ADDING_WEBVIEW!!!!!", "!!!!!!!CHROME WEB CLIENT");
-                    inAppWebView.setWebChromeClient(new InAppChromeClient(thatWebView) {
-                        @Override
-                        public boolean onJsPrompt(WebView view, String url, String message, String defaultValue, JsPromptResult result) {
-                            LOG.e(LOG_TAG, "FUCK YEAH SHOW HTML WORKED!!");
-                            try {
-                                org.json.JSONObject obj = new JSONObject();
-                                obj.put("type", HTTP_REQUEST_DONE);
-                                String cookies = CookieManager.getInstance().getCookie(requestUrl);
-                                obj.put("content", message);
-                                obj.put("cookies", cookies);
-                                obj.put("url", requestUrl);
-                                sendUpdate(obj, true);
-                            } catch (JSONException ex) {
-                                LOG.e(LOG_TAG, "URI passed in has caused a JSON error.");
-                            }
-                            result.cancel();
-                            return true;
-                        }
-                    });
+                    inAppWebView.setWebChromeClient(new InAppChromeClient(thatWebView));
 
                     WebViewClient client = new InAppBrowserClient(thatWebView, edittext);
                     inAppWebView.setWebViewClient(client);
@@ -1363,21 +1349,34 @@ public class InAppBrowser extends CordovaPlugin {
                     LOG.e(LOG_TAG, "Malformed url: " + url);
                 }
 
-                // Iterator<?> keys = requestCookies.keys();
-                // while( keys.hasNext() ) {
-                //     String key = (String)keys.next();
                 //     try {
-                //         cookieManager.setCookie(url, key + "=" + requestCookies.getString(key));
+                //         cookieManager.setCookie(requestCookies);
                 //     } catch (JSONException ex) {
                 //         LOG.d(LOG_TAG, "Should never happen");
                 //     }
-                // }
 
-                // inAppWebView.addJavascriptInterface(new HTMLViewerJavaScriptInterface(thatIAB), "HtmlViewer");
-                inAppWebView.loadUrl(url);
+                if (method.equals("get")) {
+                    inAppWebView.loadUrl(url);
+                } else if (method.equals("post")) {
+                    List<String> postDataList = new ArrayList<String>();
+                    Iterator<String> params = requestParams.keys();
+                    while( params.hasNext() ) {
+                        try {
+                            String param = params.next();
+                            String paramValue = requestParams.getString(param);
+                            postDataList.add(param + "=" + URLEncoder.encode(paramValue, "UTF-8"));
+                        } catch(JSONException ex) {
+                            LOG.e(LOG_TAG, "Should never happen", ex);
+                        }  catch(UnsupportedEncodingException ex) {
+                            LOG.e(LOG_TAG, "Should never happen", ex);
+                        }
+                    }
+                    String postData = postDataList.stream().collect(Collectors.joining("&"));
+                    inAppWebView.postUrl(url, postData.getBytes());
+                }
 
                 if(openWindowHidden) {
-                    // dialog.hide();
+                    dialog.hide();
                 }
             }
         };
@@ -1617,11 +1616,16 @@ public class InAppBrowser extends CordovaPlugin {
 
             LOG.d("PAGE_FINISHED", "page finished loading: " + url);
             if (url.equals(requestUrl)) {
-                LOG.d("HTTP_GET", "Closing HTTP get loop");
-                webView.loadUrl(
-                    "javascript:window.prompt" +
-                    "('<html>'+document.getElementsByTagName('html')[0].innerHTML+'</html>');");
-                requestUrl = null;
+                try {
+                    org.json.JSONObject obj = new JSONObject();
+                    obj.put("type", HTTP_REQUEST_DONE);
+                    String cookies = CookieManager.getInstance().getCookie(requestUrl);
+                    obj.put("cookies", cookies);
+                    obj.put("url", requestUrl);
+                    sendUpdate(obj, true);
+                } catch (JSONException ex) {
+                    LOG.e(LOG_TAG, "Should never happen", ex);
+                }
             }
 
             // https://issues.apache.org/jira/browse/CB-11248
