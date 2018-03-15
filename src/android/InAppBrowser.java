@@ -72,6 +72,7 @@ import org.json.JSONArray;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.net.URL;
 import java.util.Arrays;
 import java.util.List;
 import java.util.HashMap;
@@ -86,6 +87,7 @@ public class InAppBrowser extends CordovaPlugin {
     private static final String SELF = "_self";
     private static final String SYSTEM = "_system";
     private static final String CAPTCHA = "_captcha";
+    private static final String HTTP_REQUEST = "_httprequest";
     private static final String EXIT_EVENT = "exit";
     private static final String LOCATION = "location";
     private static final String ZOOM = "zoom";
@@ -95,6 +97,7 @@ public class InAppBrowser extends CordovaPlugin {
     private static final String LOAD_ERROR_EVENT = "loaderror";
     private static final String LOAD_RESOURCE_EVENT = "loadresource";
     private static final String CAPTCHA_DONE_EVENT = "captchadone";
+    private static final String HTTP_REQUEST_DONE = "requestdone";
     private static final String CLEAR_ALL_CACHE = "clearcache";
     private static final String CLEAR_SESSION_CACHE = "clearsessioncache";
     private static final String HARDWARE_BACK_BUTTON = "hardwareback";
@@ -139,6 +142,7 @@ public class InAppBrowser extends CordovaPlugin {
     private boolean showFooter = false;
     private String footerColor = "";
     private String captchaUrl = null;
+    private String requestUrl = null;
 
     /**
      * Executes the request and returns PluginResult.
@@ -240,6 +244,19 @@ public class InAppBrowser extends CordovaPlugin {
                             String content = captchaOptions.getString("content");
                             String userAgent = captchaOptions.getString("useragent");
                             result = showCaptchaPage(url, features, content, userAgent, captchaCookies);
+                        } catch (JSONException ex) {
+                            LOG.e(LOG_TAG, "Should never happen", ex);
+                        }
+                    }
+                    else if (HTTP_REQUEST.equals(target)) {
+                        LOG.d(LOG_TAG, "Making http GET request in InAppBrowser");
+                        try {
+                            org.json.JSONObject requestOptions = new org.json.JSONObject(captchaOptionsJson);
+                            org.json.JSONObject requestCookies = captchaOptions.getJSONObject("cookies");
+                            org.json.JSONObject requestParams = captchaOptions.getJSONObject("params");
+                            String method = requestOptions.getString("method");
+                            String userAgent = requestOptions.getString("useragent");
+                            result = makeHttpRequest(url, features, method, userAgent, requestCookies, requestParams);
                         } catch (JSONException ex) {
                             LOG.e(LOG_TAG, "Should never happen", ex);
                         }
@@ -1049,6 +1066,16 @@ public class InAppBrowser extends CordovaPlugin {
         return "";
     }
 
+    public void clearCookiesForDomain(String domain) {
+        CookieManager cookieManager = CookieManager.getInstance();
+        String cookiestring = cookieManager.getCookie(domain);
+        String[] cookies =  cookiestring.split(";");
+        for (int i=0; i<cookies.length; i++) {
+            String[] cookieparts = cookies[i].split("=");
+            cookieManager.setCookie(domain, cookieparts[0].trim()+"=; Expires=Wed, 31 Dec 2025 23:59:59 GMT");
+        }
+    }
+
     /**
      * Display a new browser with the specified URL.
      *
@@ -1072,55 +1099,182 @@ public class InAppBrowser extends CordovaPlugin {
             public void run() {
 
                 // CB-6702 InAppBrowser hangs when opening more than one instance
-                if (dialog != null) {
-                    dialog.dismiss();
-                };
+                if (dialog == null) {
+                    // Edit Text Box
+                    edittext = new EditText(cordova.getActivity());
 
-                // Edit Text Box
-                edittext = new EditText(cordova.getActivity());
+                    // Let's create the main dialog
+                    dialog = new InAppBrowserDialog(cordova.getActivity(), android.R.style.Theme_NoTitleBar);
+                    dialog.getWindow().getAttributes().windowAnimations = android.R.style.Animation_Dialog;
+                    dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+                    dialog.setCancelable(true);
+                    dialog.setInAppBroswer(getInAppBrowser());
 
-                // Let's create the main dialog
-                dialog = new InAppBrowserDialog(cordova.getActivity(), android.R.style.Theme_NoTitleBar);
-                dialog.getWindow().getAttributes().windowAnimations = android.R.style.Animation_Dialog;
-                dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-                dialog.setCancelable(true);
-                dialog.setInAppBroswer(getInAppBrowser());
+                    // Main container layout
+                    LinearLayout main = new LinearLayout(cordova.getActivity());
+                    main.setOrientation(LinearLayout.VERTICAL);
 
-                // Main container layout
-                LinearLayout main = new LinearLayout(cordova.getActivity());
-                main.setOrientation(LinearLayout.VERTICAL);
+                    // WebView
+                    inAppWebView = new WebView(cordova.getActivity());
+                    inAppWebView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+                    inAppWebView.setId(Integer.valueOf(6));
 
-                // WebView
-                inAppWebView = new WebView(cordova.getActivity());
-                inAppWebView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-                inAppWebView.setId(Integer.valueOf(6));
+                    WebViewClient client = new InAppBrowserClient(thatWebView, edittext);
+                    inAppWebView.setWebViewClient(client);
+                    WebSettings settings = inAppWebView.getSettings();
+                    settings.setJavaScriptEnabled(true);
+                    settings.setJavaScriptCanOpenWindowsAutomatically(true);
+                    settings.setBuiltInZoomControls(false);
+                    settings.setPluginState(android.webkit.WebSettings.PluginState.ON);
+                    settings.setUserAgentString(userAgent);
 
-                WebViewClient client = new InAppBrowserClient(thatWebView, edittext);
-                inAppWebView.setWebViewClient(client);
-                WebSettings settings = inAppWebView.getSettings();
-                settings.setJavaScriptEnabled(true);
-                settings.setJavaScriptCanOpenWindowsAutomatically(true);
-                settings.setBuiltInZoomControls(false);
-                settings.setPluginState(android.webkit.WebSettings.PluginState.ON);
-                settings.setUserAgentString(userAgent);
+                    if(android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.JELLY_BEAN_MR1) {
+                        settings.setMediaPlaybackRequiresUserGesture(mediaPlaybackRequiresUserGesture);
+                    }
 
-                if(android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.JELLY_BEAN_MR1) {
-                    settings.setMediaPlaybackRequiresUserGesture(mediaPlaybackRequiresUserGesture);
+                    //Toggle whether this is enabled or not!
+                    Bundle appSettings = cordova.getActivity().getIntent().getExtras();
+                    boolean enableDatabase = appSettings == null ? true : appSettings.getBoolean("InAppBrowserStorageEnabled", true);
+                    if (enableDatabase) {
+                        String databasePath = cordova.getActivity().getApplicationContext().getDir("inAppBrowserDB", Context.MODE_PRIVATE).getPath();
+                        settings.setDatabasePath(databasePath);
+                        settings.setDatabaseEnabled(true);
+                    }
+                    settings.setDomStorageEnabled(true);
                 }
 
-                //Toggle whether this is enabled or not!
-                Bundle appSettings = cordova.getActivity().getIntent().getExtras();
-                boolean enableDatabase = appSettings == null ? true : appSettings.getBoolean("InAppBrowserStorageEnabled", true);
-                if (enableDatabase) {
-                    String databasePath = cordova.getActivity().getApplicationContext().getDir("inAppBrowserDB", Context.MODE_PRIVATE).getPath();
-                    settings.setDatabasePath(databasePath);
-                    settings.setDatabaseEnabled(true);
+                // CookieManager cookieManager = CookieManager.getInstance();
+                // URL urlObj = new URL(url);
+                // clearCookiesForDomain(urlObj.getHost());
+
+                // // Enable Thirdparty Cookies on >=Android 5.0 device
+                // if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                //     cookieManager.setAcceptThirdPartyCookies(inAppWebView, true);
+                // }
+
+                // Iterator<?> keys = captchaCookies.keys();
+                // while( keys.hasNext() ) {
+                //     String key = (String)keys.next();
+                //     try {
+                //         cookieManager.setCookie(url, key + "=" + captchaCookies.getString(key));
+                //     } catch (JSONException ex) {
+                //         LOG.d(LOG_TAG, "Should never happen");
+                //     }
+                // }
+
+                // inAppWebView.loadDataWithBaseURL(url, content, "text/html", "UTF-8", null);
+                // inAppWebView.setId(Integer.valueOf(6));
+                // inAppWebView.getSettings().setLoadWithOverviewMode(true);
+                // inAppWebView.getSettings().setUseWideViewPort(useWideViewPort);
+                // inAppWebView.requestFocus();
+                // inAppWebView.requestFocusFromTouch();
+
+                // // Add our webview to our main view/layout
+                // RelativeLayout webViewLayout = new RelativeLayout(cordova.getActivity());
+                // webViewLayout.addView(inAppWebView);
+                // main.addView(webViewLayout);
+
+                // WindowManager.LayoutParams lp = new WindowManager.LayoutParams();
+                // lp.copyFrom(dialog.getWindow().getAttributes());
+                // lp.width = WindowManager.LayoutParams.MATCH_PARENT;
+                // lp.height = WindowManager.LayoutParams.MATCH_PARENT;
+
+                // dialog.setContentView(main);
+                dialog.show();
+                // dialog.getWindow().setAttributes(lp);
+                // // the goal of openhidden is to load the url and not display it
+                // // Show() needs to be called to cause the URL to be loaded
+                // if(openWindowHidden) {
+                //     dialog.hide();
+                // }
+            }
+        };
+        this.cordova.getActivity().runOnUiThread(runnable);
+        return "";
+    }
+
+
+
+    /**
+     * Display a new browser with the specified URL.
+     *
+     * @param url the url to load.
+     * @param features jsonObject
+     */
+    public String makeHttpGetRequest(
+            final String url,
+            HashMap<String, String> features,
+            final String method,
+            final String userAgent,
+            final org.json.JSONObject requestCookies,
+            final org.json.JSONObject requestParams) {
+
+        final CordovaWebView thatWebView = this.webView;
+
+        requestUrl = url;
+        openWindowHidden = true;
+
+        // Create dialog in new thread
+        Runnable runnable = new Runnable() {
+            private int dpToPixels(int dipValue) {
+                return (int) TypedValue.applyDimension(
+                        TypedValue.COMPLEX_UNIT_DIP,
+                        (float) dipValue,
+                        cordova.getActivity().getResources().getDisplayMetrics());
+            }
+
+            @SuppressLint("NewApi")
+            public void run() {
+
+                // CB-6702 InAppBrowser hangs when opening more than one instance
+                // ram: Create a new thing called tunnel dialog.
+                if (dialog == null) {
+                    // Edit Text Box
+                    edittext = new EditText(cordova.getActivity());
+
+                    // Let's create the main dialog
+                    dialog = new InAppBrowserDialog(cordova.getActivity(), android.R.style.Theme_NoTitleBar);
+                    dialog.getWindow().getAttributes().windowAnimations = android.R.style.Animation_Dialog;
+                    dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+                    dialog.setCancelable(true);
+                    dialog.setInAppBroswer(getInAppBrowser());
+
+                    // Main container layout
+                    LinearLayout main = new LinearLayout(cordova.getActivity());
+                    main.setOrientation(LinearLayout.VERTICAL);
+
+                    // WebView
+                    inAppWebView = new WebView(cordova.getActivity());
+                    inAppWebView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+                    inAppWebView.setId(Integer.valueOf(6));
+
+                    WebViewClient client = new InAppBrowserClient(thatWebView, edittext);
+                    inAppWebView.setWebViewClient(client);
+                    WebSettings settings = inAppWebView.getSettings();
+                    settings.setJavaScriptEnabled(true);
+                    settings.setJavaScriptCanOpenWindowsAutomatically(true);
+                    settings.setBuiltInZoomControls(false);
+                    settings.setPluginState(android.webkit.WebSettings.PluginState.ON);
+                    settings.setUserAgentString(userAgent);
+
+                    if(android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.JELLY_BEAN_MR1) {
+                        settings.setMediaPlaybackRequiresUserGesture(mediaPlaybackRequiresUserGesture);
+                    }
+
+                    //Toggle whether this is enabled or not!
+                    Bundle appSettings = cordova.getActivity().getIntent().getExtras();
+                    boolean enableDatabase = appSettings == null ? true : appSettings.getBoolean("InAppBrowserStorageEnabled", true);
+                    if (enableDatabase) {
+                        String databasePath = cordova.getActivity().getApplicationContext().getDir("inAppBrowserDB", Context.MODE_PRIVATE).getPath();
+                        settings.setDatabasePath(databasePath);
+                        settings.setDatabaseEnabled(true);
+                    }
+                    settings.setDomStorageEnabled(true);
                 }
-                settings.setDomStorageEnabled(true);
 
                 CookieManager cookieManager = CookieManager.getInstance();
-                cookieManager.removeAllCookie();
-                cookieManager.removeSessionCookie();
+                URL urlObj = new URL(url);
+                clearCookiesForDomain(urlObj.getHost());
 
                 // Enable Thirdparty Cookies on >=Android 5.0 device
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
@@ -1137,7 +1291,7 @@ public class InAppBrowser extends CordovaPlugin {
                     }
                 }
 
-                inAppWebView.loadDataWithBaseURL(url, content, "text/html", "UTF-8", null);
+                inAppWebView.loadURL(url);
                 inAppWebView.setId(Integer.valueOf(6));
                 inAppWebView.getSettings().setLoadWithOverviewMode(true);
                 inAppWebView.getSettings().setUseWideViewPort(useWideViewPort);
@@ -1167,7 +1321,6 @@ public class InAppBrowser extends CordovaPlugin {
         this.cordova.getActivity().runOnUiThread(runnable);
         return "";
     }
-
 
     /**
      * Create a new plugin success result and send it back to JavaScript
@@ -1265,8 +1418,8 @@ public class InAppBrowser extends CordovaPlugin {
                 try {
                     JSONObject obj = new JSONObject();
                     obj.put("type", CAPTCHA_DONE_EVENT);
-                    // Put cookies for connectebt.com domain here!
                     String cookies = CookieManager.getInstance().getCookie(captchaUrl);
+                    obj.put("content", "<div>page-content</div>");
                     obj.put("cookies", cookies);
                     obj.put("url", captchaUrl);
                     sendUpdate(obj, true);
@@ -1399,6 +1552,24 @@ public class InAppBrowser extends CordovaPlugin {
             } else {
                 CookieSyncManager.getInstance().sync();
             }
+
+            LOG.d("PAGE_FINISHED", "page finished loading: " + url);
+            if (url.equals(requestUrl)) {
+                LOG.d("HTTP_GET", "Closing HTTP get loop");
+                try {
+                    JSONObject obj = new JSONObject();
+                    obj.put("type", HTTP_REQUEST_DONE);
+                    String cookies = CookieManager.getInstance().getCookie(requestUrl);
+                    obj.put("cookies", cookies);
+                    obj.put("url", captchaUrl);
+                    sendUpdate(obj, true);
+                } catch (JSONException ex) {
+                    LOG.e(LOG_TAG, "URI passed in has caused a JSON error.");
+                }
+                captchaUrl = null;
+            }
+
+            // If in scrape mode. Add code check the page for the resulting html only
 
             // https://issues.apache.org/jira/browse/CB-11248
             view.clearFocus();

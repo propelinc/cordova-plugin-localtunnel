@@ -38,7 +38,8 @@
             'loaderror': channel.create('loaderror'),
             'exit': channel.create('exit'),
             'loadresource': channel.create('loadresource'),
-            'captchadone': channel.create('captchadone')
+            'captchadone': channel.create('captchadone'),
+            'requestdone': channel.create('requestdone')
         };
     }
 
