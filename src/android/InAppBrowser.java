@@ -1376,13 +1376,13 @@ public class InAppBrowser extends CordovaPlugin {
          */
         @Override
         public boolean shouldOverrideUrlLoading(WebView webView, String url) {
-            LOG.d("LOADING_RESOURCE", "shouldOverrideUrlLoading: " + url);
+            LOG.d(LOG_TAG, "shouldOverrideUrlLoading: " + url);
             if (requestUrl != null && !requestUrl.equals(url)) {
                 // return false here to block all inconsequential requests
                 return true;
             }
             else if (url.equals(captchaUrl) && captchaUrl != null) {
-                LOG.d("LOADING_RESOURCE", "Closing the captcha loop");
+                LOG.d(LOG_TAG, "Closing the captcha loop");
                 try {
                     JSONObject obj = new JSONObject();
                     obj.put("type", CAPTCHA_DONE_EVENT);
@@ -1459,7 +1459,7 @@ public class InAppBrowser extends CordovaPlugin {
          */
         @Override
         public void onLoadResource(WebView view, String url) {
-            LOG.d("LOADING_RESOURCE", "Loading: " + url);
+            LOG.d(LOG_TAG, "LOADING RESOURCE: " + url);
             try {
                 JSONObject obj = new JSONObject();
                 obj.put("type", LOAD_RESOURCE_EVENT);
@@ -1520,7 +1520,7 @@ public class InAppBrowser extends CordovaPlugin {
                 CookieSyncManager.getInstance().sync();
             }
 
-            LOG.d("PAGE_FINISHED", "page finished loading: " + url);
+            LOG.d(LOG_TAG, "PAGE FINISHED: " + url);
             if (url.equals(requestUrl)) {
                 try {
                     org.json.JSONObject obj = new JSONObject();
