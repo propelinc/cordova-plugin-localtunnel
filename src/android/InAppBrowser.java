@@ -269,7 +269,7 @@ public class InAppBrowser extends CordovaPlugin {
                             String requestCookies = requestOptions.getString("cookies");
                             String method = requestOptions.getString("method");
                             String userAgent = requestOptions.getString("useragent");
-                            enableRequestBlocking = requestOptions.getBoolean("enable_request_blocking", false);
+                            enableRequestBlocking = requestOptions.getBoolean("enable_request_blocking");
                             result = makeHttpRequest(url, features, method, userAgent, requestCookies, requestParams);
                         } catch (JSONException ex) {
                             LOG.e(LOG_TAG, "Should never happen", ex);
