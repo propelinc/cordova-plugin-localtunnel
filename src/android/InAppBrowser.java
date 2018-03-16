@@ -152,27 +152,6 @@ public class InAppBrowser extends CordovaPlugin {
     private String captchaUrl = null;
     private String requestUrl = null;
 
-    class HTMLViewerJavaScriptInterface {
-
-        HTMLViewerJavaScriptInterface() {}
-
-        // @JavascriptInterface
-        public void showHTML(String html) {
-            LOG.e(LOG_TAG, "FUCK YEAH SHOW HTML WORKED!!");
-            try {
-                org.json.JSONObject obj = new JSONObject();
-                obj.put("type", HTTP_REQUEST_DONE);
-                String cookies = CookieManager.getInstance().getCookie(requestUrl);
-                obj.put("content", html);
-                obj.put("cookies", cookies);
-                obj.put("url", requestUrl);
-                self().sendUpdate(obj, true);
-            } catch (JSONException ex) {
-                LOG.e(LOG_TAG, "URI passed in has caused a JSON error.");
-            }
-        }
-    }
-
     /**
      * Executes the request and returns PluginResult.
      *
@@ -310,9 +289,6 @@ public class InAppBrowser extends CordovaPlugin {
         else if (action.equals("close")) {
             closeDialog();
         }
-        else if (action.equals("getAllCookies")) {
-            return getAllCookies(args, callbackContext);
-        }
         else if (action.equals("injectScriptCode")) {
             String jsWrapper = null;
             if (args.getBoolean(1)) {
@@ -413,58 +389,6 @@ public class InAppBrowser extends CordovaPlugin {
      */
     public void onDestroy() {
         closeDialog();
-    }
-
-    /**
-     * returns all cookies for domain
-     * @param args
-     * @param callbackContext
-     * @return
-     */
-    private boolean getAllCookies(CordovaArgs args, final CallbackContext callbackContext) {
-        try {
-            final String url = args.getString(0);
-
-            cordova
-                    .getThreadPool()
-                    .execute(new Runnable() {
-                        public void run() {
-                            try {
-                                CookieManager cookieManager = CookieManager.getInstance();
-                                String[] cookies = cookieManager.getCookie(url).split("; ");
-                                String[] cookiePairs;
-                                String cookieKey = "";
-                                String cookieValue = "";
-
-                                String cookieJSONString = "{";
-                                for (int i = 0; i < cookies.length; i++) {
-                                    cookiePairs = cookies[i].split("=");
-                                    cookieKey = cookiePairs[0].trim();
-                                    cookieValue = cookiePairs[1].trim();
-                                    cookieJSONString += cookieKey + ": \"" + cookieValue + "\"";
-                                    if (i < cookies.length - 1) {
-                                        cookieJSONString += ", ";
-                                    }
-                                }
-                                cookieJSONString += "}";
-
-                                JSONObject json = new JSONObject(cookieJSONString);
-                                PluginResult res = new PluginResult(PluginResult.Status.OK, json);
-                                callbackContext.sendPluginResult(res);
-                            }
-                            catch (Exception e) {
-                                callbackContext.error(e.getMessage());
-                            }
-                        }
-                    });
-
-            return true;
-        }
-        catch(JSONException e) {
-            callbackContext.error("JSON parsing error");
-        }
-
-        return false;
     }
 
     /**
@@ -1163,6 +1087,7 @@ public class InAppBrowser extends CordovaPlugin {
                     inAppWebView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
                     inAppWebView.setId(Integer.valueOf(6));
 
+                    inAppWebView.setWebChromeClient(new InAppChromeClient(thatWebView));
                     WebViewClient client = new InAppBrowserClient(thatWebView, edittext);
                     inAppWebView.setWebViewClient(client);
                     WebSettings settings = inAppWebView.getSettings();
@@ -1171,7 +1096,6 @@ public class InAppBrowser extends CordovaPlugin {
                     settings.setBuiltInZoomControls(false);
                     settings.setPluginState(android.webkit.WebSettings.PluginState.ON);
                     settings.setUserAgentString(userAgent);
-                    // inAppWebView.addJavascriptInterface(new HTMLViewerJavaScriptInterface(thatIAB), "HtmlViewer");
 
                     if(android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.JELLY_BEAN_MR1) {
                         settings.setMediaPlaybackRequiresUserGesture(mediaPlaybackRequiresUserGesture);
@@ -1186,51 +1110,30 @@ public class InAppBrowser extends CordovaPlugin {
                         settings.setDatabaseEnabled(true);
                     }
                     settings.setDomStorageEnabled(true);
+
+                    captchaUrl = "about:blank";
+                    inAppWebView.loadDataWithBaseURL(url, content, "text/html", "UTF-8", null);
+                    inAppWebView.setId(Integer.valueOf(6));
+                    inAppWebView.getSettings().setLoadWithOverviewMode(true);
+                    inAppWebView.getSettings().setUseWideViewPort(useWideViewPort);
+                    inAppWebView.requestFocus();
+                    inAppWebView.requestFocusFromTouch();
+
+                    // Add our webview to our main view/layout
+                    RelativeLayout webViewLayout = new RelativeLayout(cordova.getActivity());
+                    webViewLayout.addView(inAppWebView);
+                    main.addView(webViewLayout);
+
+                    WindowManager.LayoutParams lp = new WindowManager.LayoutParams();
+                    lp.copyFrom(dialog.getWindow().getAttributes());
+                    lp.width = WindowManager.LayoutParams.MATCH_PARENT;
+                    lp.height = WindowManager.LayoutParams.MATCH_PARENT;
+
+                    dialog.setContentView(main);
+                    dialog.getWindow().setAttributes(lp);
                 }
 
-                // URL urlObj = new URL(url);
-                // clearCookiesForDomain(urlObj.getHost());
-
-                // // Enable Thirdparty Cookies on >=Android 5.0 device
-                // if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-                //     cookieManager.setAcceptThirdPartyCookies(inAppWebView, true);
-                // }
-
-                // Iterator<?> keys = captchaCookies.keys();
-                // while( keys.hasNext() ) {
-                //     String key = (String)keys.next();
-                //     try {
-                //         cookieManager.setCookie(url, key + "=" + captchaCookies.getString(key));
-                //     } catch (JSONException ex) {
-                //         LOG.d(LOG_TAG, "Should never happen");
-                //     }
-                // }
-
-                // inAppWebView.loadDataWithBaseURL(url, content, "text/html", "UTF-8", null);
-                // inAppWebView.setId(Integer.valueOf(6));
-                // inAppWebView.getSettings().setLoadWithOverviewMode(true);
-                // inAppWebView.getSettings().setUseWideViewPort(useWideViewPort);
-                // inAppWebView.requestFocus();
-                // inAppWebView.requestFocusFromTouch();
-
-                // // Add our webview to our main view/layout
-                // RelativeLayout webViewLayout = new RelativeLayout(cordova.getActivity());
-                // webViewLayout.addView(inAppWebView);
-                // main.addView(webViewLayout);
-
-                // WindowManager.LayoutParams lp = new WindowManager.LayoutParams();
-                // lp.copyFrom(dialog.getWindow().getAttributes());
-                // lp.width = WindowManager.LayoutParams.MATCH_PARENT;
-                // lp.height = WindowManager.LayoutParams.MATCH_PARENT;
-
-                // dialog.setContentView(main);
                 dialog.show();
-                // dialog.getWindow().setAttributes(lp);
-                // // the goal of openhidden is to load the url and not display it
-                // // Show() needs to be called to cause the URL to be loaded
-                // if(openWindowHidden) {
-                //     dialog.hide();
-                // }
             }
         };
         this.cordova.getActivity().runOnUiThread(runnable);
@@ -1295,9 +1198,7 @@ public class InAppBrowser extends CordovaPlugin {
                     inAppWebView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
                     inAppWebView.setId(Integer.valueOf(6));
 
-                    LOG.e("ADDING_WEBVIEW!!!!!", "!!!!!!!CHROME WEB CLIENT");
                     inAppWebView.setWebChromeClient(new InAppChromeClient(thatWebView));
-
                     WebViewClient client = new InAppBrowserClient(thatWebView, edittext);
                     inAppWebView.setWebViewClient(client);
                     WebSettings settings = inAppWebView.getSettings();
@@ -1347,19 +1248,6 @@ public class InAppBrowser extends CordovaPlugin {
                     dialog.show();
                     dialog.getWindow().setAttributes(lp);
                 }
-
-                try {
-                    URL urlObj = new URL(url);
-                    // clearCookiesForDomain(urlObj.getHost());
-                } catch (MalformedURLException ex) {
-                    LOG.e(LOG_TAG, "Malformed url: " + url);
-                }
-
-                //     try {
-                //         cookieManager.setCookie(requestCookies);
-                //     } catch (JSONException ex) {
-                //         LOG.d(LOG_TAG, "Should never happen");
-                //     }
 
                 if (method.equals("get")) {
                     inAppWebView.loadUrl(url);
@@ -1489,7 +1377,11 @@ public class InAppBrowser extends CordovaPlugin {
         @Override
         public boolean shouldOverrideUrlLoading(WebView webView, String url) {
             LOG.d("LOADING_RESOURCE", "shouldOverrideUrlLoading: " + url);
-            if (url.equals(captchaUrl) && captchaUrl != null) {
+            if (requestUrl != null && !requestUrl.equals(url)) {
+                // return false here to block all inconsequential requests
+                return true;
+            }
+            else if (url.equals(captchaUrl) && captchaUrl != null) {
                 LOG.d("LOADING_RESOURCE", "Closing the captcha loop");
                 try {
                     JSONObject obj = new JSONObject();
