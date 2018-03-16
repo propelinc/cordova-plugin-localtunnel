@@ -48,6 +48,7 @@ import android.webkit.JavascriptInterface;
 import android.webkit.JsPromptResult;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -74,6 +75,8 @@ import org.json.JSONArray;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -83,6 +86,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.stream.Collectors;
 
@@ -151,6 +155,7 @@ public class InAppBrowser extends CordovaPlugin {
     private String footerColor = "";
     private String captchaUrl = null;
     private String requestUrl = null;
+    private boolean enableRequestBlocking = false;
 
     /**
      * Executes the request and returns PluginResult.
@@ -264,6 +269,7 @@ public class InAppBrowser extends CordovaPlugin {
                             String requestCookies = requestOptions.getString("cookies");
                             String method = requestOptions.getString("method");
                             String userAgent = requestOptions.getString("useragent");
+                            enableRequestBlocking = requestOptions.getBoolean("enable_request_blocking", false);
                             result = makeHttpRequest(url, features, method, userAgent, requestCookies, requestParams);
                         } catch (JSONException ex) {
                             LOG.e(LOG_TAG, "Should never happen", ex);
@@ -1067,6 +1073,11 @@ public class InAppBrowser extends CordovaPlugin {
                 CookieManager cookieManager = CookieManager.getInstance();
 
                 // CB-6702 InAppBrowser hangs when opening more than one instance
+                if (dialog != null) {
+                    dialog.dismiss();
+                    dialog = null;
+                }
+
                 if (dialog == null) {
                     // Edit Text Box
                     edittext = new EditText(cordova.getActivity());
@@ -1375,11 +1386,39 @@ public class InAppBrowser extends CordovaPlugin {
          * @param url
          */
         @Override
+        public WebResourceResponse shouldInterceptRequest (final WebView webView, String url) {
+            try {
+                if (enableRequestBlocking && !requestUrl.equals(url)) {
+                    LOG.d(LOG_TAG, "REQUEST BLOCKED: " + url);
+                    InputStream data = new ByteArrayInputStream("REQUEST BLOCKED".getBytes("UTF-8"));
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+                        return new WebResourceResponse("text/html", "UTF-8", data);
+                    } else {
+                        Map<String, String> responseHeaders = new HashMap<String,String>();
+                        return new WebResourceResponse(
+                            "text/html", "UTF-8", 500, "Request blocked.",
+                            responseHeaders, data);
+                    }
+                }
+            } catch (UnsupportedEncodingException ex) {
+                LOG.e(LOG_TAG, "Should never happen", ex);
+            }
+            return super.shouldInterceptRequest(webView, url);
+        }
+
+        /**
+         * Override the URL that should be loaded
+         *
+         * This handles a small subset of all the URIs that would be encountered.
+         *
+         * @param webView
+         * @param url
+         */
+        @Override
         public boolean shouldOverrideUrlLoading(WebView webView, String url) {
             LOG.d(LOG_TAG, "shouldOverrideUrlLoading: " + url);
-            if (requestUrl != null && !requestUrl.equals(url)) {
-                // return false here to block all inconsequential requests
-                return true;
+            if (enableRequestBlocking && !requestUrl.equals(url)) {
+                return false;
             }
             else if (url.equals(captchaUrl) && captchaUrl != null) {
                 LOG.d(LOG_TAG, "Closing the captcha loop");
@@ -1533,6 +1572,7 @@ public class InAppBrowser extends CordovaPlugin {
                     LOG.e(LOG_TAG, "Should never happen", ex);
                 }
                 requestUrl = null;
+                enableRequestBlocking = false;
             }
 
             // https://issues.apache.org/jira/browse/CB-11248
