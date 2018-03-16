@@ -153,9 +153,11 @@ public class InAppBrowser extends CordovaPlugin {
     private boolean hideUrlBar = false;
     private boolean showFooter = false;
     private String footerColor = "";
-    private String captchaUrl = null;
-    private String requestUrl = null;
-    private boolean enableRequestBlocking = false;
+
+    protected String captchaUrl = null;
+    protected String requestUrl = null;
+    protected String lastRequestUrl = null;
+    protected boolean enableRequestBlocking = false;
 
     /**
      * Executes the request and returns PluginResult.
@@ -355,10 +357,6 @@ public class InAppBrowser extends CordovaPlugin {
             return false;
         }
         return true;
-    }
-
-    public InAppBrowser self() {
-        return this;
     }
 
     /**
@@ -615,6 +613,21 @@ public class InAppBrowser extends CordovaPlugin {
         showZoomControls = true;
         openWindowHidden = false;
         mediaPlaybackRequiresUserGesture = false;
+
+        // TODO(ram): Implement this?
+        // if (captchaUrl != null) {
+        //     cancelCaptcha();
+        // }
+
+        // TODO(ram): Implement this?
+        // if (requestUrl != null) {
+        //     cancelRequest();
+        // }
+
+        captchaUrl = null;
+        requestUrl = null;
+        lastRequestUrl = null;
+        enableRequestBlocking = false;
 
         if (features != null) {
             String show = features.get(LOCATION);
@@ -895,7 +908,7 @@ public class InAppBrowser extends CordovaPlugin {
                 inAppWebView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
                 inAppWebView.setId(Integer.valueOf(6));
                 // File Chooser Implemented ChromeClient
-                inAppWebView.setWebChromeClient(new InAppChromeClient(thatWebView) {
+                inAppWebView.setWebChromeClient(new InAppChromeClient(thatWebView, getInAppBrowser()) {
                     // For Android 5.0+
                     public boolean onShowFileChooser (WebView webView, ValueCallback<Uri[]> filePathCallback, WebChromeClient.FileChooserParams fileChooserParams)
                     {
@@ -1098,7 +1111,7 @@ public class InAppBrowser extends CordovaPlugin {
                     inAppWebView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
                     inAppWebView.setId(Integer.valueOf(6));
 
-                    inAppWebView.setWebChromeClient(new InAppChromeClient(thatWebView));
+                    inAppWebView.setWebChromeClient(new InAppChromeClient(thatWebView, getInAppBrowser()));
                     WebViewClient client = new InAppBrowserClient(thatWebView, edittext);
                     inAppWebView.setWebViewClient(client);
                     WebSettings settings = inAppWebView.getSettings();
@@ -1171,6 +1184,7 @@ public class InAppBrowser extends CordovaPlugin {
         final InAppBrowser thatIAB = this;
 
         requestUrl = url;
+        lastRequestUrl = url;
         openWindowHidden = true;
 
         // Create dialog in new thread
@@ -1209,7 +1223,7 @@ public class InAppBrowser extends CordovaPlugin {
                     inAppWebView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
                     inAppWebView.setId(Integer.valueOf(6));
 
-                    inAppWebView.setWebChromeClient(new InAppChromeClient(thatWebView));
+                    inAppWebView.setWebChromeClient(new InAppChromeClient(thatWebView, getInAppBrowser()));
                     WebViewClient client = new InAppBrowserClient(thatWebView, edittext);
                     inAppWebView.setWebViewClient(client);
                     WebSettings settings = inAppWebView.getSettings();

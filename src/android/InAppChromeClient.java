@@ -25,6 +25,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 
 import android.webkit.JsPromptResult;
+import android.webkit.JsResult;
 import android.webkit.WebChromeClient;
 import android.webkit.WebStorage;
 import android.webkit.WebView;
@@ -34,12 +35,14 @@ import android.webkit.GeolocationPermissions.Callback;
 public class InAppChromeClient extends WebChromeClient {
 
     private CordovaWebView webView;
+    private InAppBrowser iab;
     private String LOG_TAG = "InAppChromeClient";
     private long MAX_QUOTA = 100 * 1024 * 1024;
 
-    public InAppChromeClient(CordovaWebView webView) {
+    public InAppChromeClient(CordovaWebView webView, InAppBrowser iab) {
         super();
         this.webView = webView;
+        this.iab = iab;
     }
     /**
      * Handle database quota exceeded notification.
@@ -130,4 +133,25 @@ public class InAppChromeClient extends WebChromeClient {
         return false;
     }
 
+    /**
+     * Tell the client to display a alert dialog to the user.
+     * If the client returns true, WebView will assume that the client will
+     * handle the alert dialog and call a JsResult method.
+     *
+     * @param view
+     * @param url
+     * @param message
+     * @param result
+     */
+    @Override
+    public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
+        LOG.d(LOG_TAG, "Alert received in InAppBrowser"); 
+        if (iab.requestUrl != null || iab.lastRequestUrl.equals(url)) {
+            // Anything else with a gap: prefix should get this message
+            LOG.d(LOG_TAG, "Suppressing alert in InAppBrowser"); 
+            result.confirm();
+            return true;
+        }
+        return false;
+    }
 }
