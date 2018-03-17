@@ -99,7 +99,7 @@ public class InAppBrowser extends CordovaPlugin {
     private static final String SYSTEM = "_system";
     private static final String CAPTCHA = "_captcha";
     private static final String HTTP_REQUEST = "_httprequest";
-    private static final String CLEAR_COOKIES = "_clearCookies";
+    private static final String CLEAR_COOKIES = "_clearcookies";
     private static final String EXIT_EVENT = "exit";
     private static final String LOCATION = "location";
     private static final String ZOOM = "zoom";

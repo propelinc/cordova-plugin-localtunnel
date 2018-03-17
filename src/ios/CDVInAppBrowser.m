@@ -26,6 +26,7 @@
 #define    kInAppBrowserTargetBlank @"_blank"
 #define    kInAppBrowserTargetCaptcha @"_captcha"
 #define    kInAppBrowserTargetRequest @"_httprequest"
+#define    kInAppBrowserTargetClearCookies @"_clearcookies"
 
 #define    kInAppBrowserToolbarBarPositionBottom @"bottom"
 #define    kInAppBrowserToolbarBarPositionTop @"top"
@@ -43,6 +44,16 @@
 @end
 
 @implementation CDVInAppBrowser
+
+static NSString *toString(id object) {
+    return [NSString stringWithFormat: @"%@", object];
+}
+
+// helper function: get the url encoded string form of any object
+static NSString *urlEncode(id object) {
+    NSString *string = toString(object);
+    return [string stringByAddingPercentEscapesUsingEncoding: NSUTF8StringEncoding];
+}
 
 - (void)pluginInitialize
 {
@@ -118,6 +129,15 @@
             id requestObj = [NSJSONSerialization JSONObjectWithData:requestJsonData options:0 error:&error];
             NSDictionary *request = requestObj;
             [self openRequestInInAppBrowser:absoluteUrl withOptions:options withRequest:request];
+        } else if ([target isEqualToString:kInAppBrowserTargetClearCookies]) {
+            NSHTTPCookie *cookie;
+            NSHTTPCookieStorage *storage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
+            for (cookie in [storage cookies])
+            {
+                if (![cookie.domain isEqual: @".^filecookies^"]) {
+                    [storage deleteCookie:cookie];
+                }
+            }
         } else { // _blank or anything else
             [self openInInAppBrowser:absoluteUrl withOptions:options];
         }
@@ -394,23 +414,16 @@
     }
 
     if ([method isEqualToString:@"get"]) {
-        NSURLComponents *components = [NSURLComponents componentsWithString:[url absoluteString]];
-        NSMutableArray *queryItems = [NSMutableArray array];
-        for (NSString *key in requestParams) {
-            [queryItems addObject:[NSURLQueryItem queryItemWithName:key value:requestParams[key]]];
-        }
-
-        components.queryItems = queryItems;
-        [self.inAppBrowserViewController navigateTo:components.URL];
+        [self.inAppBrowserViewController navigateTo:url];
     } else if ([method isEqualToString:@"post"]) {
-        NSURLComponents *components = [NSURLComponents componentsWithString:[url absoluteString]];
         NSMutableArray *queryItems = [NSMutableArray array];
         for (NSString *key in requestParams) {
-            [queryItems addObject:[NSURLQueryItem queryItemWithName:key value:requestParams[key]]];
+            id value = requestParams[key];
+            [queryItems addObject: [
+                NSString stringWithFormat: @"%@=%@", urlEncode(key), urlEncode(value)]];
         }
 
-        components.queryItems = queryItems;
-        NSString *body = components.URL.query;
+        NSString *body = [queryItems componentsJoinedByString: @"&"];
         NSMutableURLRequest *request = [[NSMutableURLRequest alloc]initWithURL: url];
         [request setHTTPMethod: @"POST"];
         [request setHTTPBody: [body dataUsingEncoding: NSUTF8StringEncoding]];
@@ -617,7 +630,7 @@
     BOOL isTopLevelNavigation = [request.URL isEqual:[request mainDocumentURL]];
 
     NSLog(@"---- LOADING RESOURCE %@", url);
-    if (self.enableRequestBlocking && ![url isEqualToString: self.requestUrl]) {
+    if (self.enableRequestBlocking && ![url isEqual:self.requestUrl]) {
         return NO;
     }
     else if ([url isEqual:self.captchaUrl]) {
@@ -631,6 +644,9 @@
 
             [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
             [self.commandDelegate sendPluginResult:pluginResult callbackId:self.callbackId];
+
+            self.captchaUrl = nil;
+            self.captchaUrlCount = 0;
             return NO;
         }
     }
@@ -686,24 +702,24 @@
 {
     if (self.callbackId != nil) {
         // TODO: It would be more useful to return the URL the page is actually on (e.g. if it's been redirected).
-        NSString* url = [self.inAppBrowserViewController.currentURL absoluteString];
-
-        if (self.requestUrl != nil && [url isEqualToString:self.requestUrl]) {
-            NSArray* cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:self.captchaUrl];
+        NSURL* url = self.inAppBrowserViewController.currentURL;
+        if (self.requestUrl != nil && [url isEqual:self.requestUrl]) {
+            NSArray* cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:self.requestUrl];
             NSDictionary* cookieHeader = [NSHTTPCookie requestHeaderFieldsWithCookies:cookies];
             NSString* cookieStr = [cookieHeader objectForKey:@"Cookie"];
-            CDVPluginResult* pluginResult = [
-                CDVPluginResult resultWithStatus:CDVCommandStatus_OK
+            CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
                 messageAsDictionary:@{@"type":@"requestdone", @"url":[url absoluteString], @"cookies":cookieStr}];
 
+            [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
+            [self.commandDelegate sendPluginResult:pluginResult callbackId:self.callbackId];
             self.requestUrl = nil;
             self.enableRequestBlocking = false;
         }
 
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
-                                                      messageAsDictionary:@{@"type":@"loadstop", @"url":url}];
-        [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
+            messageAsDictionary:@{@"type":@"loadstop", @"url":[url  absoluteString]}];
 
+        [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:self.callbackId];
     }
 }

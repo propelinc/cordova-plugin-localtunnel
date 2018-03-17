@@ -37,9 +37,9 @@
 @property (nonatomic, copy) NSRegularExpression *callbackIdPattern;
 @property (nonatomic, copy) NSURL* requestUrl;
 @property (nonatomic, copy) NSURL* lastRequestUrl;
-@property (nonatomic, copy) BOOL enableRequestBlocking;
 @property (nonatomic, copy) NSURL* captchaUrl;
 @property (nonatomic, assign) int captchaUrlCount;
+@property (nonatomic, assign) BOOL enableRequestBlocking;
 
 - (void)open:(CDVInvokedUrlCommand*)command;
 - (void)close:(CDVInvokedUrlCommand*)command;
@@ -107,6 +107,7 @@
 - (void)close;
 - (void)navigateToForm:(NSURLRequest*)request;
 - (void)navigateToCaptcha:(NSURL*)url :(NSString*)content;
+- (void)navigateTo:(NSURL*)url;
 - (void)showLocationBar:(BOOL)show;
 - (void)showToolBar:(BOOL)show : (NSString *) toolbarPosition;
 - (void)setCloseButtonTitle:(NSString*)title : (NSString*) colorString;
