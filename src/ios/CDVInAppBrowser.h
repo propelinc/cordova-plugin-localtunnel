@@ -35,6 +35,9 @@
 @property (nonatomic, retain) CDVInAppBrowserViewController* inAppBrowserViewController;
 @property (nonatomic, copy) NSString* callbackId;
 @property (nonatomic, copy) NSRegularExpression *callbackIdPattern;
+@property (nonatomic, copy) NSURL* requestUrl;
+@property (nonatomic, copy) NSURL* lastRequestUrl;
+@property (nonatomic, copy) BOOL enableRequestBlocking;
 @property (nonatomic, copy) NSURL* captchaUrl;
 @property (nonatomic, assign) int captchaUrlCount;
 
@@ -102,7 +105,7 @@
 @property (nonatomic) NSURL* currentURL;
 
 - (void)close;
-- (void)navigateTo:(NSURL*)url;
+- (void)navigateToForm:(NSURLRequest*)request;
 - (void)navigateToCaptcha:(NSURL*)url :(NSString*)content;
 - (void)showLocationBar:(BOOL)show;
 - (void)showToolBar:(BOOL)show : (NSString *) toolbarPosition;

@@ -614,16 +614,6 @@ public class InAppBrowser extends CordovaPlugin {
         openWindowHidden = false;
         mediaPlaybackRequiresUserGesture = false;
 
-        // TODO(ram): Implement this?
-        // if (captchaUrl != null) {
-        //     cancelCaptcha();
-        // }
-
-        // TODO(ram): Implement this?
-        // if (requestUrl != null) {
-        //     cancelRequest();
-        // }
-
         captchaUrl = null;
         requestUrl = null;
         lastRequestUrl = null;
