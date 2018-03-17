@@ -146,7 +146,7 @@ public class InAppChromeClient extends WebChromeClient {
     @Override
     public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
         LOG.d(LOG_TAG, "Alert received in InAppBrowser"); 
-        if (iab.requestUrl != null || iab.lastRequestUrl.equals(url)) {
+        if (iab.requestUrl != null || url.equals(iab.lastRequestUrl)) {
             // Anything else with a gap: prefix should get this message
             LOG.d(LOG_TAG, "Suppressing alert in InAppBrowser"); 
             result.confirm();
