@@ -35,11 +35,6 @@
 @property (nonatomic, retain) CDVInAppBrowserViewController* inAppBrowserViewController;
 @property (nonatomic, copy) NSString* callbackId;
 @property (nonatomic, copy) NSRegularExpression *callbackIdPattern;
-@property (nonatomic, copy) NSURL* requestUrl;
-@property (nonatomic, copy) NSURL* lastRequestUrl;
-@property (nonatomic, copy) NSURL* captchaUrl;
-@property (nonatomic, assign) int captchaUrlCount;
-@property (nonatomic, assign) BOOL enableRequestBlocking;
 
 - (void)open:(CDVInvokedUrlCommand*)command;
 - (void)close:(CDVInvokedUrlCommand*)command;

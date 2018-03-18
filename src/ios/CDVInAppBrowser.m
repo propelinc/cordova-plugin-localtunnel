@@ -21,6 +21,8 @@
 #import <Cordova/CDVPluginResult.h>
 #import <Cordova/CDVUserAgentUtil.h>
 
+#import "swizzling.h"
+
 #define    kInAppBrowserTargetSelf @"_self"
 #define    kInAppBrowserTargetSystem @"_system"
 #define    kInAppBrowserTargetBlank @"_blank"
@@ -36,10 +38,67 @@
 #define    LOCATIONBAR_HEIGHT 21.0
 #define    FOOTER_HEIGHT ((TOOLBAR_HEIGHT) + (LOCATIONBAR_HEIGHT))
 
+
+static NSURL* captchaUrl = nil;
+static NSURL* requestUrl = nil;
+static NSURL* lastRequestUrl = nil;
+static int captchaCount = 0;
+static bool enableRequestBlocking = false;
+
+
 #pragma mark CDVInAppBrowser
+
+@interface BlockAllRequestsProtocol : NSURLProtocol
+@end
+
+@implementation BlockAllRequestsProtocol
++ (BOOL)canInitWithRequest:(NSURLRequest *)request
+{
+    if (enableRequestBlocking && ![requestUrl isEqual:request.URL]) {
+        NSLog(@"Blocking request %@", request.URL);
+        return YES;
+    }
+
+    return NO;
+}
+
++ (NSURLRequest *)canonicalRequestForRequest:(NSURLRequest *)request { return request; }
+- (NSCachedURLResponse *)cachedResponse { return nil; }
+
+- (void)startLoading
+{
+    // For every request, emit "didFailWithError:" with an NSError to reflect the network blocking state
+    id<NSURLProtocolClient> client = [self client];
+    NSError* error = [NSError errorWithDomain:NSURLErrorDomain
+        code:kCFURLErrorNotConnectedToInternet // = -1009 = error code when network is down
+        userInfo:@{ NSLocalizedDescriptionKey:@"All network requests are blocked by the application"}];
+    [client URLProtocol:self didFailWithError:error];
+}
+- (void)stopLoading { }
+
+@end
+
 
 @interface CDVInAppBrowser () {
     NSInteger _previousStatusBarStyle;
+}
+@end
+
+static void (*show)(id, SEL) = NULL;
+
+static void swizzle_show(UIAlertView *self, SEL _cmd)
+{
+    if (lastRequestUrl == nil) {
+        show(self, _cmd);
+    } else {
+        NSLog(@"Suppressing alerts for background requests.");
+    }
+}
+
+@implementation UIAlertView (Blocker)
++ (void)load
+{
+    SwizzleSelector(self, @selector(show), &swizzle_show, &show);
 }
 @end
 
@@ -59,6 +118,7 @@ static NSString *urlEncode(id object) {
 {
     _previousStatusBarStyle = -1;
     _callbackIdPattern = nil;
+    // [NSURLProtocol registerClass:[BlockAllRequestsProtocol class]];
 }
 
 - (id)settingForKey:(NSString*)key
@@ -155,10 +215,11 @@ static NSString *urlEncode(id object) {
 {
     CDVInAppBrowserOptions* browserOptions = [CDVInAppBrowserOptions parseOptions:options];
 
-    self.enableRequestBlocking = false;
-    self.requestUrl = nil;
-    self.lastRequestUrl = nil;
-    self.captchaUrl = nil;
+    enableRequestBlocking = false;
+    requestUrl = nil;
+    lastRequestUrl = nil;
+    captchaUrl = nil;
+    captchaCount = 0;
 
     if (browserOptions.clearcache) {
         NSHTTPCookie *cookie;
@@ -269,10 +330,10 @@ static NSString *urlEncode(id object) {
     NSDictionary* captchaCookies = [captcha objectForKey:@"cookies"];
     NSString* content = [captcha objectForKey:@"content"];
     NSString* userAgent = [captcha objectForKey:@"useragent"];
-    self.captchaUrl = url;
-    self.captchaUrlCount = 0;
-    self.requestUrl = nil;
-    self.enableRequestBlocking = false;
+    captchaUrl = url;
+    captchaCount = 0;
+    requestUrl = nil;
+    enableRequestBlocking = false;
 
     if (self.inAppBrowserViewController == nil) {
         self.inAppBrowserViewController = [[CDVInAppBrowserViewController alloc] initWithUserAgent:userAgent prevUserAgent:[self.commandDelegate userAgent] browserOptions: browserOptions];
@@ -349,10 +410,11 @@ static NSString *urlEncode(id object) {
     NSDictionary* requestParams = [request objectForKey:@"params"];
     NSString* method = [request objectForKey:@"method"];
     NSString* userAgent = [request objectForKey:@"useragent"];
-    self.enableRequestBlocking = [request objectForKey:@"enable_request_blocking"];
-    self.requestUrl = url;
-    self.lastRequestUrl = url;
-    self.captchaUrl = nil;
+    enableRequestBlocking = [request objectForKey:@"enable_request_blocking"];
+    requestUrl = url;
+    lastRequestUrl = url;
+    captchaUrl = nil;
+    captchaCount = 0;
 
     if (self.inAppBrowserViewController == nil) {
         self.inAppBrowserViewController = [[CDVInAppBrowserViewController alloc] initWithUserAgent:userAgent prevUserAgent:[self.commandDelegate userAgent] browserOptions: browserOptions];
@@ -630,12 +692,12 @@ static NSString *urlEncode(id object) {
     BOOL isTopLevelNavigation = [request.URL isEqual:[request mainDocumentURL]];
 
     NSLog(@"---- LOADING RESOURCE %@", url);
-    if (self.enableRequestBlocking && ![url isEqual:self.requestUrl]) {
+    if (enableRequestBlocking && ![url isEqual:requestUrl]) {
         return NO;
     }
-    else if ([url isEqual:self.captchaUrl]) {
-        if (self.captchaUrlCount++ > 0) {
-            NSArray* cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:self.captchaUrl];
+    else if ([url isEqual:captchaUrl]) {
+        if (captchaCount++ > 0) {
+            NSArray* cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:captchaUrl];
             NSDictionary* cookieHeader = [NSHTTPCookie requestHeaderFieldsWithCookies:cookies];
             NSString* cookieStr = [cookieHeader objectForKey:@"Cookie"];
             CDVPluginResult* pluginResult = [
@@ -645,8 +707,8 @@ static NSString *urlEncode(id object) {
             [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
             [self.commandDelegate sendPluginResult:pluginResult callbackId:self.callbackId];
 
-            self.captchaUrl = nil;
-            self.captchaUrlCount = 0;
+            captchaUrl = nil;
+            captchaCount = 0;
             return NO;
         }
     }
@@ -703,8 +765,8 @@ static NSString *urlEncode(id object) {
     if (self.callbackId != nil) {
         // TODO: It would be more useful to return the URL the page is actually on (e.g. if it's been redirected).
         NSURL* url = self.inAppBrowserViewController.currentURL;
-        if (self.requestUrl != nil && [url isEqual:self.requestUrl]) {
-            NSArray* cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:self.requestUrl];
+        if (requestUrl != nil && [url isEqual:requestUrl]) {
+            NSArray* cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:requestUrl];
             NSDictionary* cookieHeader = [NSHTTPCookie requestHeaderFieldsWithCookies:cookies];
             NSString* cookieStr = [cookieHeader objectForKey:@"Cookie"];
             CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
@@ -712,8 +774,8 @@ static NSString *urlEncode(id object) {
 
             [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
             [self.commandDelegate sendPluginResult:pluginResult callbackId:self.callbackId];
-            self.requestUrl = nil;
-            self.enableRequestBlocking = false;
+            requestUrl = nil;
+            enableRequestBlocking = false;
         }
 
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK

@@ -82,6 +82,9 @@
         <header-file src="src/ios/CDVInAppBrowser.h" />
 	    <source-file src="src/ios/CDVInAppBrowser.m" />
 
+        <header-file src="src/ios/swizzling.h" />
+	    <source-file src="src/ios/swizzling.m" />
+
 	    <framework src="CoreGraphics.framework" />
     </platform>
 
