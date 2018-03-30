@@ -41,7 +41,6 @@
 
 static NSURL* captchaUrl = nil;
 static NSURL* requestUrl = nil;
-static NSURL* lastRequestUrl = nil;
 static int captchaCount = 0;
 static bool enableRequestBlocking = false;
 
@@ -88,7 +87,7 @@ static void (*show)(id, SEL) = NULL;
 
 static void swizzle_show(UIAlertView *self, SEL _cmd)
 {
-    if (lastRequestUrl == nil) {
+    if (requestUrl == nil) {
         show(self, _cmd);
     } else {
         NSLog(@"Suppressing alerts for background requests.");
@@ -217,7 +216,6 @@ static NSString *urlEncode(id object) {
 
     enableRequestBlocking = false;
     requestUrl = nil;
-    lastRequestUrl = nil;
     captchaUrl = nil;
     captchaCount = 0;
 
@@ -330,6 +328,8 @@ static NSString *urlEncode(id object) {
     NSDictionary* captchaCookies = [captcha objectForKey:@"cookies"];
     NSString* content = [captcha objectForKey:@"content"];
     NSString* userAgent = [captcha objectForKey:@"useragent"];
+    bool hidden = [captcha objectForKey:@"hidden"];
+
     captchaUrl = url;
     captchaCount = 0;
     requestUrl = nil;
@@ -395,7 +395,7 @@ static NSString *urlEncode(id object) {
     }
 
     [self.inAppBrowserViewController navigateToCaptcha:url :content];
-    if (!browserOptions.hidden) {
+    if (!hidden) {
         [self show:nil];
     }
 }
@@ -411,8 +411,9 @@ static NSString *urlEncode(id object) {
     NSString* method = [request objectForKey:@"method"];
     NSString* userAgent = [request objectForKey:@"useragent"];
     enableRequestBlocking = [request objectForKey:@"enable_request_blocking"];
+
+    NSURL* lastRequestUrl = requestUrl;
     requestUrl = url;
-    lastRequestUrl = url;
     captchaUrl = nil;
     captchaCount = 0;
 
@@ -475,22 +476,35 @@ static NSString *urlEncode(id object) {
         self.inAppBrowserViewController.webView.suppressesIncrementalRendering = browserOptions.suppressesincrementalrendering;
     }
 
+    NSMutableArray *queryItems = [NSMutableArray array];
+    for (NSString *key in requestParams) {
+        id value = requestParams[key];
+        [queryItems addObject: [
+            NSString stringWithFormat: @"%@=%@", urlEncode(key), urlEncode(value)]];
+    }
+
+    NSString *body = [queryItems componentsJoinedByString: @"&"];
+    NSMutableURLRequest *req;
+
     if ([method isEqualToString:@"get"]) {
-        [self.inAppBrowserViewController navigateTo:url];
-    } else if ([method isEqualToString:@"post"]) {
-        NSMutableArray *queryItems = [NSMutableArray array];
-        for (NSString *key in requestParams) {
-            id value = requestParams[key];
-            [queryItems addObject: [
-                NSString stringWithFormat: @"%@=%@", urlEncode(key), urlEncode(value)]];
+        if ([queryItems count] > 0) {
+            NSString *URLString = [NSString stringWithFormat: @"%@?%@", [url absoluteString], body];
+            url = [NSURL URLWithString:URLString];
         }
 
-        NSString *body = [queryItems componentsJoinedByString: @"&"];
-        NSMutableURLRequest *request = [[NSMutableURLRequest alloc]initWithURL: url];
-        [request setHTTPMethod: @"POST"];
-        [request setHTTPBody: [body dataUsingEncoding: NSUTF8StringEncoding]];
-        [self.inAppBrowserViewController navigateToForm:request];
+        req = [[NSMutableURLRequest alloc]initWithURL: url];
+        [req setHTTPMethod: @"GET"];
+    } else if ([method isEqualToString:@"post"]) {
+        req = [[NSMutableURLRequest alloc]initWithURL: url];
+        [req setHTTPMethod: @"POST"];
+        [req setHTTPBody: [body dataUsingEncoding: NSUTF8StringEncoding]];
     }
+
+    if (lastRequestUrl != nil) {
+        [req setValue:[lastRequestUrl absoluteString] forHTTPHeaderField: @"Referer"];
+    }
+
+    [self.inAppBrowserViewController navigateToForm:req];
 
     if (!browserOptions.hidden) {
         [self show:nil];
@@ -692,29 +706,9 @@ static NSString *urlEncode(id object) {
     BOOL isTopLevelNavigation = [request.URL isEqual:[request mainDocumentURL]];
 
     NSLog(@"---- LOADING RESOURCE %@", url);
-    if (enableRequestBlocking && ![url isEqual:requestUrl]) {
-        return NO;
-    }
-    else if ([url isEqual:captchaUrl]) {
-        if (captchaCount++ > 0) {
-            NSArray* cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:captchaUrl];
-            NSDictionary* cookieHeader = [NSHTTPCookie requestHeaderFieldsWithCookies:cookies];
-            NSString* cookieStr = [cookieHeader objectForKey:@"Cookie"];
-            CDVPluginResult* pluginResult = [
-                CDVPluginResult resultWithStatus:CDVCommandStatus_OK
-                messageAsDictionary:@{@"type":@"captchadone", @"url":[url absoluteString], @"cookies":cookieStr}];
-
-            [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
-            [self.commandDelegate sendPluginResult:pluginResult callbackId:self.callbackId];
-
-            captchaUrl = nil;
-            captchaCount = 0;
-            return NO;
-        }
-    }
     // See if the url uses the 'gap-iab' protocol. If so, the host should be the id of a callback to execute,
     // and the path, if present, should be a JSON-encoded value to pass to the callback.
-    else if ([[url scheme] isEqualToString:@"gap-iab"]) {
+    if ([[url scheme] isEqualToString:@"gap-iab"]) {
         NSString* scriptCallbackId = [url host];
         CDVPluginResult* pluginResult = nil;
 
@@ -743,6 +737,27 @@ static NSString *urlEncode(id object) {
         [theWebView stopLoading];
         [self openInSystem:url];
         return NO;
+    }
+    else if (enableRequestBlocking && ![url isEqual:requestUrl] && ![[url absoluteString] isEqualToString:@"about:blank"]) {
+        NSLog(@"---- BLOCKING RESOURCE %@", url);
+        return NO;
+    }
+    else if ([url isEqual:captchaUrl]) {
+        if (captchaCount++ > 0) {
+            NSArray* cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:captchaUrl];
+            NSDictionary* cookieHeader = [NSHTTPCookie requestHeaderFieldsWithCookies:cookies];
+            NSString* cookieStr = [cookieHeader objectForKey:@"Cookie"];
+            CDVPluginResult* pluginResult = [
+                CDVPluginResult resultWithStatus:CDVCommandStatus_OK
+                messageAsDictionary:@{@"type":@"captchadone", @"url":[url absoluteString], @"cookies":cookieStr}];
+
+            [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
+            [self.commandDelegate sendPluginResult:pluginResult callbackId:self.callbackId];
+
+            captchaUrl = nil;
+            captchaCount = 0;
+            return NO;
+        }
     }
     else if ((self.callbackId != nil) && isTopLevelNavigation) {
         // Send a loadstart event for each top-level navigation (includes redirects).
@@ -774,8 +789,6 @@ static NSString *urlEncode(id object) {
 
             [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
             [self.commandDelegate sendPluginResult:pluginResult callbackId:self.callbackId];
-            requestUrl = nil;
-            enableRequestBlocking = false;
         }
 
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK

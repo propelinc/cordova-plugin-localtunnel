@@ -167,7 +167,7 @@ public class InAppBrowser extends CordovaPlugin {
      * @param callbackContext the callbackContext used when calling back into JavaScript.
      * @return A PluginResult object with a status and message.
      */
-    public boolean execute(String action, CordovaArgs args, final CallbackContext callbackContext) throws JSONException {
+    public boolean execute(String action, final CordovaArgs args, final CallbackContext callbackContext) throws JSONException {
         if (action.equals("open")) {
             this.callbackContext = callbackContext;
             final String url = args.getString(0);
@@ -177,7 +177,6 @@ public class InAppBrowser extends CordovaPlugin {
             }
             final String target = t;
             final HashMap<String, String> features = parseFeature(args.optString(2));
-            final String captchaOptionsJson = args.optString(3);
 
             LOG.d(LOG_TAG, "target = " + target);
 
@@ -254,11 +253,7 @@ public class InAppBrowser extends CordovaPlugin {
                     else if (CAPTCHA.equals(target)) {
                         LOG.d(LOG_TAG, "loading captcha in InAppBrowser");
                         try {
-                            org.json.JSONObject captchaOptions = new org.json.JSONObject(captchaOptionsJson);
-                            org.json.JSONObject captchaCookies = captchaOptions.getJSONObject("cookies");
-                            String content = captchaOptions.getString("content");
-                            String userAgent = captchaOptions.getString("useragent");
-                            result = showCaptchaPage(url, features, content, userAgent, captchaCookies);
+                            result = showCaptchaPage(url, features, args);
                         } catch (JSONException ex) {
                             LOG.e(LOG_TAG, "Should never happen", ex);
                         }
@@ -266,13 +261,7 @@ public class InAppBrowser extends CordovaPlugin {
                     else if (HTTP_REQUEST.equals(target)) {
                         LOG.d(LOG_TAG, "Making http request in InAppBrowser");
                         try {
-                            org.json.JSONObject requestOptions = new org.json.JSONObject(captchaOptionsJson);
-                            org.json.JSONObject requestParams = requestOptions.getJSONObject("params");
-                            String requestCookies = requestOptions.getString("cookies");
-                            String method = requestOptions.getString("method");
-                            String userAgent = requestOptions.getString("useragent");
-                            enableRequestBlocking = requestOptions.getBoolean("enable_request_blocking");
-                            result = makeHttpRequest(url, features, method, userAgent, requestCookies, requestParams);
+                            result = makeHttpRequest(url, features, args);
                         } catch (JSONException ex) {
                             LOG.e(LOG_TAG, "Should never happen", ex);
                         }
@@ -1057,7 +1046,13 @@ public class InAppBrowser extends CordovaPlugin {
      * @param url the url to load.
      * @param features jsonObject
      */
-    public String showCaptchaPage(final String url, HashMap<String, String> features, final String content, final String userAgent, final org.json.JSONObject captchaCookies) {
+    public String showCaptchaPage(final String url, HashMap<String, String> features, CordovaArgs args) throws JSONException {
+        final String captchaOptionsJson = args.optString(3);
+        final org.json.JSONObject captchaOptions = new org.json.JSONObject(captchaOptionsJson);
+        final org.json.JSONObject captchaCookies = captchaOptions.getJSONObject("cookies");
+        final String content = captchaOptions.getString("content");
+        final String userAgent = captchaOptions.getString("useragent");
+        final Boolean captchaHidden = captchaOptions.getBoolean("hidden");
         final CordovaWebView thatWebView = this.webView;
         final InAppBrowser thatIAB = this;
         captchaUrl = url;
@@ -1147,7 +1142,9 @@ public class InAppBrowser extends CordovaPlugin {
                     dialog.getWindow().setAttributes(lp);
                 }
 
-                dialog.show();
+                if (!captchaHidden) {
+                    dialog.show();
+                }
             }
         };
         this.cordova.getActivity().runOnUiThread(runnable);
@@ -1162,13 +1159,13 @@ public class InAppBrowser extends CordovaPlugin {
      * @param url the url to load.
      * @param features jsonObject
      */
-    public String makeHttpRequest(
-            final String url,
-            HashMap<String, String> features,
-            final String method,
-            final String userAgent,
-            final String requestCookies,
-            final org.json.JSONObject requestParams) {
+    public String makeHttpRequest(final String url, HashMap<String, String> features, CordovaArgs args) throws JSONException {
+        final String requestOptionsJson = args.optString(3);
+        final org.json.JSONObject requestOptions = new org.json.JSONObject(requestOptionsJson);
+        final org.json.JSONObject requestParams = requestOptions.getJSONObject("params");
+        final String requestCookies = requestOptions.getString("cookies");
+        final String method = requestOptions.getString("method");
+        final String userAgent = requestOptions.getString("useragent");
 
         final CordovaWebView thatWebView = this.webView;
         final InAppBrowser thatIAB = this;
@@ -1176,6 +1173,7 @@ public class InAppBrowser extends CordovaPlugin {
         requestUrl = url;
         lastRequestUrl = url;
         openWindowHidden = true;
+        enableRequestBlocking = requestOptions.getBoolean("enable_request_blocking");
 
         // Create dialog in new thread
         Runnable runnable = new Runnable() {
