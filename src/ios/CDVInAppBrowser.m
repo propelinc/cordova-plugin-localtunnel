@@ -328,7 +328,7 @@ static NSString *urlEncode(id object) {
     NSDictionary* captchaCookies = [captcha objectForKey:@"cookies"];
     NSString* content = [captcha objectForKey:@"content"];
     NSString* userAgent = [captcha objectForKey:@"useragent"];
-    bool hidden = [captcha objectForKey:@"hidden"];
+    bool hidden = [[captcha objectForKey:@"hidden"] boolValue];
 
     captchaUrl = url;
     captchaCount = 0;
