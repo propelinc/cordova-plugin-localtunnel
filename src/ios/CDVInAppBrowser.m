@@ -323,7 +323,7 @@ static NSString *urlEncode(id object) {
 - (void)openCaptchaInInAppBrowser:(NSURL*)url withOptions:(NSString*)options withCaptcha:captcha
 {
     CDVInAppBrowserOptions* browserOptions = [
-        CDVInAppBrowserOptions parseOptions:@"location=no,toolbar=no,disallowoverscroll=yes"];
+        CDVInAppBrowserOptions parseOptions:@"location=no,toolbar=yes,disallowoverscroll=yes"];
 
     NSDictionary* captchaCookies = [captcha objectForKey:@"cookies"];
     NSString* content = [captcha objectForKey:@"content"];
