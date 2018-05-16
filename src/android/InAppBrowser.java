@@ -504,7 +504,12 @@ public class InAppBrowser extends CordovaPlugin {
                     // NB: wait for about:blank before dismissing
                     public void onPageFinished(WebView view, String url) {
                         if (dialog != null) {
-                            dialog.dismiss();
+                            // https://stackoverflow.com/questions/22924825/view-not-attached-to-window-manager-crash
+                            if (Build.VERSION.SDK_INT < 17 && !cordova.getActivity().isFinishing()) {
+                                dialog.dismiss();
+                            } else if (Build.VERSION.SDK_INT >= 17 && !cordova.getActivity().isDestroyed()) {
+                                dialog.dismiss();
+                            }
                             dialog = null;
                         }
                     }
