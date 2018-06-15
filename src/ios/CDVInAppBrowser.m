@@ -738,6 +738,17 @@ static NSString *urlEncode(id object) {
         [self openInSystem:url];
         return NO;
     }
+    else if ([[url absoluteString] containsString:@"gateway.acs-inc.com"]) {
+        NSURLComponents *components = [NSURLComponents new];
+        components.scheme = @"https";
+        components.host = @"www.connectebt.com";
+        components.path = [url path];
+        components.query = [url query];
+        NSURL *actualUrl = [components URL];
+        requestUrl = actualUrl;
+        [self.inAppBrowserViewController navigateTo:actualUrl];
+        return NO;
+    }
     else if (enableRequestBlocking && ![url isEqual:requestUrl] && ![[url absoluteString] isEqualToString:@"about:blank"]) {
         NSLog(@"---- BLOCKING RESOURCE %@", url);
         return NO;

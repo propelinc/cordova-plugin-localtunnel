@@ -1419,7 +1419,14 @@ public class InAppBrowser extends CordovaPlugin {
         @Override
         public boolean shouldOverrideUrlLoading(WebView webView, String url) {
             LOG.d(LOG_TAG, "shouldOverrideUrlLoading: " + url);
-            if (enableRequestBlocking && !requestUrl.equals(url)) {
+            if (url.contains("gateway.acs-inc.com")) {
+                String actualUrl = url.replaceAll("http://gateway.acs-inc.com:[0-9]+", "https://www.connectebt.com");
+                requestUrl = actualUrl;
+                lastRequestUrl = actualUrl;
+                webView.loadUrl(actualUrl);
+                return true;
+            }
+            else if (enableRequestBlocking && !requestUrl.equals(url)) {
                 return false;
             }
             else if (url.equals(captchaUrl) && captchaUrl != null) {
