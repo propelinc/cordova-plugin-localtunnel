@@ -157,6 +157,7 @@ static NSString *urlEncode(id object) {
     NSString* options = [command argumentAtIndex:2 withDefault:@"" andClass:[NSString class]];
 
     self.callbackId = command.callbackId;
+    self.urlLoadMap = @{};
 
     if (url != nil) {
 #ifdef __CORDOVA_4_0_0
@@ -771,12 +772,20 @@ static NSString *urlEncode(id object) {
         }
     }
     else if ((self.callbackId != nil) && isTopLevelNavigation) {
+        NSString *loadedUrl = [self.urlLoadMap objectForKey:@"loadstart"];
+        if ([loadedUrl isEqualToString:[url absoluteString]]) {
+            self.urlLoadMap = @{};
+            return NO;
+        }
+
         // Send a loadstart event for each top-level navigation (includes redirects).
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
                                                       messageAsDictionary:@{@"type":@"loadstart", @"url":[url absoluteString]}];
         [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
 
         [self.commandDelegate sendPluginResult:pluginResult callbackId:self.callbackId];
+
+        self.urlLoadMap = @{@"loadstart":[url absoluteString]};
     }
 
     return YES;
