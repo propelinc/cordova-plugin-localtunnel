@@ -33,7 +33,7 @@
 }
 
 @property (nonatomic, retain) CDVInAppBrowserViewController* inAppBrowserViewController;
-@property (nonatomic, copy) NSDictionary* urlLoadMap;
+@property (nonatomic, copy) NSString* loadedUrl;
 @property (nonatomic, copy) NSString* callbackId;
 @property (nonatomic, copy) NSRegularExpression *callbackIdPattern;
 
