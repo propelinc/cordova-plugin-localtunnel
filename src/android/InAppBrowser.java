@@ -1434,7 +1434,7 @@ public class InAppBrowser extends CordovaPlugin {
             else if (enableRequestBlocking && !requestUrl.equals(url)) {
                 return false;
             }
-            else if (url.equals(captchaUrl) && captchaUrl != null) {
+            else if (captchaUrl != null) {
                 LOG.d(LOG_TAG, "Closing the captcha loop");
                 try {
                     JSONObject obj = new JSONObject();
