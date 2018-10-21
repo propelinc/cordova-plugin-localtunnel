@@ -1180,6 +1180,13 @@ public class InAppBrowser extends CordovaPlugin {
         openWindowHidden = true;
         enableRequestBlocking = requestOptions.getBoolean("enable_request_blocking");
 
+        if (features != null) {
+            String hidden = features.get(HIDDEN);
+            if (hidden != null && hidden.equals("no")) {
+                openWindowHidden = false;
+            }
+        }
+
         // Create dialog in new thread
         Runnable runnable = new Runnable() {
             private int dpToPixels(int dipValue) {
