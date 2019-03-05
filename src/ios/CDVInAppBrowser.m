@@ -797,6 +797,7 @@ static NSString *urlEncode(id object) {
         // TODO: It would be more useful to return the URL the page is actually on (e.g. if it's been redirected).
         NSURL* url = self.inAppBrowserViewController.currentURL;
         if (requestUrl != nil && [url isEqual:requestUrl]) {
+            enableRequestBlocking = false;
             NSArray* cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:requestUrl];
             NSDictionary* cookieHeader = [NSHTTPCookie requestHeaderFieldsWithCookies:cookies];
             NSString* cookieStr = [cookieHeader objectForKey:@"Cookie"];
