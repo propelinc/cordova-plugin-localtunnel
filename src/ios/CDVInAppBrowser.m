@@ -117,7 +117,7 @@ static NSString *urlEncode(id object) {
 {
     _previousStatusBarStyle = -1;
     _callbackIdPattern = nil;
-    // [NSURLProtocol registerClass:[BlockAllRequestsProtocol class]];
+    [NSURLProtocol registerClass:[BlockAllRequestsProtocol class]];
 }
 
 - (id)settingForKey:(NSString*)key
@@ -404,9 +404,7 @@ static NSString *urlEncode(id object) {
 
 - (void)openRequestInInAppBrowser:(NSURL*)url withOptions:(NSString*)options withRequest:request
 {
-    CDVInAppBrowserOptions* browserOptions = [
-        CDVInAppBrowserOptions parseOptions:@"location=no,toolbar=no,disallowoverscroll=yes,hidden=yes"];
-
+    CDVInAppBrowserOptions* browserOptions = [CDVInAppBrowserOptions parseOptions:options];
     NSDictionary* requestCookies = [request objectForKey:@"cookies"];
     NSDictionary* requestParams = [request objectForKey:@"params"];
     NSString* method = [request objectForKey:@"method"];
