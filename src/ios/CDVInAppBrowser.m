@@ -53,7 +53,10 @@ static bool enableRequestBlocking = false;
 @implementation BlockAllRequestsProtocol
 + (BOOL)canInitWithRequest:(NSURLRequest *)request
 {
-    if (enableRequestBlocking && ![requestUrl isEqual:request.URL]) {
+    if (enableRequestBlocking &&
+            [requestUrl.host isEqual:request.URL.host] &&
+            ![requestUrl isEqual:request.URL]) {
+
         NSLog(@"Blocking request %@", request.URL);
         return YES;
     }
