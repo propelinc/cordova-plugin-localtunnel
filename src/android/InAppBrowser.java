@@ -1437,8 +1437,10 @@ public class InAppBrowser extends CordovaPlugin {
                 webView.loadUrl(actualUrl);
                 return true;
             }
-            else if (enableRequestBlocking && !requestUrl.equals(url)) {
-                return false;
+            else if (requestUrl != null && !requestUrl.equals(url)) {
+                LOG.d(LOG_TAG, "Handle page redirect from: " + requestUrl);
+                requestUrl = url;
+                lastRequestUrl = url;
             }
             else if (captchaUrl != null) {
                 LOG.d(LOG_TAG, "Closing the captcha loop");
