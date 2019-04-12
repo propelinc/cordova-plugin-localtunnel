@@ -751,9 +751,10 @@ static NSString *urlEncode(id object) {
         [self.inAppBrowserViewController navigateTo:actualUrl];
         return NO;
     }
-    else if (enableRequestBlocking && ![url isEqual:requestUrl] && ![[url absoluteString] isEqualToString:@"about:blank"]) {
-        NSLog(@"---- BLOCKING RESOURCE %@", url);
-        return NO;
+    else if (requestUrl != nil && ![url isEqual:requestUrl] && ![[url absoluteString] isEqualToString:@"about:blank"]) {
+        NSLog(@"---- HANDLE PAGE REDIRECT FROM %@", requestUrl);
+        requestUrl = url;
+        return YES;
     }
     else if ([url isEqual:captchaUrl]) {
         if (captchaCount++ > 0) {
