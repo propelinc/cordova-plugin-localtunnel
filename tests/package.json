@@ -1,9 +1,9 @@
 {
-  "name": "cordova-plugin-inappbrowser-tests",
+  "name": "cordova-plugin-localtunnel-tests",
   "version": "1.7.1-dev",
   "description": "",
   "cordova": {
-    "id": "cordova-plugin-inappbrowser-tests",
+    "id": "cordova-plugin-localtunnel-tests",
     "platforms": []
   },
   "keywords": [
