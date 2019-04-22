@@ -37,7 +37,7 @@ public class LocalTunnelDialog extends Dialog {
         this.context = context;
     }
 
-    public void setInAppBroswer(LocalTunnel browser) {
+    public void setLocalTunnel(LocalTunnel browser) {
         this.localTunnel = browser;
     }
 

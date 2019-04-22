@@ -22,7 +22,6 @@
 (function () {
     var exec = require('cordova/exec');
     var channel = require('cordova/channel');
-    var modulemapper = require('cordova/modulemapper');
     var urlutil = require('cordova/urlutil');
 
     function LocalTunnel () {
@@ -88,12 +87,6 @@
     };
 
     module.exports = function (strUrl, strWindowName, strWindowFeatures, callbacks, captcha) {
-        // Don't catch calls that write to existing frames (e.g. named iframes).
-        if (window.frames && window.frames[strWindowName]) {
-            var origOpenFunc = modulemapper.getOriginalSymbol(window, 'open');
-            return origOpenFunc.apply(window, arguments);
-        }
-
         strUrl = urlutil.makeAbsolute(strUrl);
         var iab = new LocalTunnel();
 

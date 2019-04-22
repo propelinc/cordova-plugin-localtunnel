@@ -764,7 +764,7 @@ public class LocalTunnel extends CordovaPlugin {
                 dialog.getWindow().getAttributes().windowAnimations = android.R.style.Animation_Dialog;
                 dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
                 dialog.setCancelable(true);
-                dialog.setInAppBroswer(getLocalTunnel());
+                dialog.setLocalTunnel(getLocalTunnel());
 
                 // Main container layout
                 LinearLayout main = new LinearLayout(cordova.getActivity());
@@ -966,7 +966,7 @@ public class LocalTunnel extends CordovaPlugin {
                 Bundle appSettings = cordova.getActivity().getIntent().getExtras();
                 boolean enableDatabase = appSettings == null ? true : appSettings.getBoolean("LocalTunnelStorageEnabled", true);
                 if (enableDatabase) {
-                    String databasePath = cordova.getActivity().getApplicationContext().getDir("inAppBrowserDB", Context.MODE_PRIVATE).getPath();
+                    String databasePath = cordova.getActivity().getApplicationContext().getDir("localTunnelDB", Context.MODE_PRIVATE).getPath();
                     settings.setDatabasePath(databasePath);
                     settings.setDatabaseEnabled(true);
                 }
@@ -1090,7 +1090,7 @@ public class LocalTunnel extends CordovaPlugin {
                     dialog.getWindow().getAttributes().windowAnimations = android.R.style.Animation_Dialog;
                     dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
                     dialog.setCancelable(true);
-                    dialog.setInAppBroswer(getLocalTunnel());
+                    dialog.setLocalTunnel(getLocalTunnel());
 
                     // Main container layout
                     LinearLayout main = new LinearLayout(cordova.getActivity());
@@ -1119,7 +1119,7 @@ public class LocalTunnel extends CordovaPlugin {
                     Bundle appSettings = cordova.getActivity().getIntent().getExtras();
                     boolean enableDatabase = appSettings == null ? true : appSettings.getBoolean("LocalTunnelStorageEnabled", true);
                     if (enableDatabase) {
-                        String databasePath = cordova.getActivity().getApplicationContext().getDir("inAppBrowserDB", Context.MODE_PRIVATE).getPath();
+                        String databasePath = cordova.getActivity().getApplicationContext().getDir("localTunnelDB", Context.MODE_PRIVATE).getPath();
                         settings.setDatabasePath(databasePath);
                         settings.setDatabaseEnabled(true);
                     }
@@ -1212,7 +1212,7 @@ public class LocalTunnel extends CordovaPlugin {
                     dialog.getWindow().getAttributes().windowAnimations = android.R.style.Animation_Dialog;
                     dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
                     dialog.setCancelable(true);
-                    dialog.setInAppBroswer(getLocalTunnel());
+                    dialog.setLocalTunnel(getLocalTunnel());
 
                     // Main container layout
                     LinearLayout main = new LinearLayout(cordova.getActivity());
@@ -1242,7 +1242,7 @@ public class LocalTunnel extends CordovaPlugin {
                     Bundle appSettings = cordova.getActivity().getIntent().getExtras();
                     boolean enableDatabase = appSettings == null ? true : appSettings.getBoolean("LocalTunnelStorageEnabled", true);
                     if (enableDatabase) {
-                        String databasePath = cordova.getActivity().getApplicationContext().getDir("inAppBrowserDB", Context.MODE_PRIVATE).getPath();
+                        String databasePath = cordova.getActivity().getApplicationContext().getDir("localTunnelDB", Context.MODE_PRIVATE).getPath();
                         settings.setDatabasePath(databasePath);
                         settings.setDatabaseEnabled(true);
                     }
