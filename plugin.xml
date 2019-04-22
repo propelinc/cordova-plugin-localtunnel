@@ -46,7 +46,7 @@
 
         <source-file src="src/android/LocalTunnel.java" target-dir="src/org/apache/cordova/localtunnel" />
         <source-file src="src/android/LocalTunnelDialog.java" target-dir="src/org/apache/cordova/localtunnel" />
-        <source-file src="src/android/LocalTunnelClient.java" target-dir="src/org/apache/cordova/localtunnel" />
+        <source-file src="src/android/LocalTunnelChromeClient.java" target-dir="src/org/apache/cordova/localtunnel" />
 
         <!--  drawable src/android/resources -->
         <resource-file src="src/android/res/drawable-hdpi/ic_action_next_item.png" target="res/drawable-hdpi/ic_action_next_item.png" />
