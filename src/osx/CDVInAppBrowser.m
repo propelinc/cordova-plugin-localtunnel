@@ -17,18 +17,18 @@
  under the License.
  */
 
-#import "CDVInAppBrowser.h"
+#import "CDVLocalTunnel.h"
 #import <Cordova/CDVPluginResult.h>
 
 #define    kInAppBrowserTargetSelf @"_self"
 #define    kInAppBrowserTargetSystem @"_system"
 #define    kInAppBrowserTargetBlank @"_blank"
 
-@interface CDVInAppBrowser () {
+@interface CDVLocalTunnel () {
 }
 @end
 
-@implementation CDVInAppBrowser
+@implementation CDVLocalTunnel
 
 - (void)pluginInitialize
 {

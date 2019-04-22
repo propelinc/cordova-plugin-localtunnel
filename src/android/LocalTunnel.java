@@ -16,7 +16,7 @@
        specific language governing permissions and limitations
        under the License.
 */
-package org.apache.cordova.inappbrowser;
+package org.apache.cordova.localtunnel;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
@@ -91,10 +91,10 @@ import java.util.StringTokenizer;
 import java.util.stream.Collectors;
 
 @SuppressLint("SetJavaScriptEnabled")
-public class InAppBrowser extends CordovaPlugin {
+public class LocalTunnel extends CordovaPlugin {
 
     private static final String NULL = "null";
-    protected static final String LOG_TAG = "InAppBrowser";
+    protected static final String LOG_TAG = "LocalTunnel";
     private static final String SELF = "_self";
     private static final String SYSTEM = "_system";
     private static final String CAPTCHA = "_captcha";
@@ -128,8 +128,8 @@ public class InAppBrowser extends CordovaPlugin {
 
     private static final List customizableOptions = Arrays.asList(CLOSE_BUTTON_CAPTION, TOOLBAR_COLOR, NAVIGATION_COLOR, CLOSE_BUTTON_COLOR, FOOTER_COLOR);
 
-    private InAppBrowserDialog dialog;
-    private WebView inAppWebView;
+    private LocalTunnelDialog dialog;
+    private WebView localTunnelWebView;
     private EditText edittext;
     private CallbackContext callbackContext;
     private boolean showLocationBar = true;
@@ -139,7 +139,7 @@ public class InAppBrowser extends CordovaPlugin {
     private boolean clearSessionCache = false;
     private boolean hadwareBackButton = true;
     private boolean mediaPlaybackRequiresUserGesture = false;
-    private boolean shouldPauseInAppBrowser = false;
+    private boolean shouldPauseLocalTunnel = false;
     private boolean useWideViewPort = true;
     private ValueCallback<Uri> mUploadCallback;
     private ValueCallback<Uri[]> mUploadCallbackLollipop;
@@ -239,9 +239,9 @@ public class InAppBrowser extends CordovaPlugin {
                                 LOG.e(LOG_TAG, "Error dialing " + url + ": " + e.toString());
                             }
                         }
-                        // load in InAppBrowser
+                        // load in LocalTunnel
                         else {
-                            LOG.d(LOG_TAG, "loading in InAppBrowser");
+                            LOG.d(LOG_TAG, "loading in LocalTunnel");
                             result = showWebPage(url, features);
                         }
                     }
@@ -251,7 +251,7 @@ public class InAppBrowser extends CordovaPlugin {
                         result = openExternal(url);
                     }
                     else if (CAPTCHA.equals(target)) {
-                        LOG.d(LOG_TAG, "loading captcha in InAppBrowser");
+                        LOG.d(LOG_TAG, "loading captcha in LocalTunnel");
                         try {
                             result = showCaptchaPage(url, features, args);
                         } catch (JSONException ex) {
@@ -259,7 +259,7 @@ public class InAppBrowser extends CordovaPlugin {
                         }
                     }
                     else if (HTTP_REQUEST.equals(target)) {
-                        LOG.d(LOG_TAG, "Making http request in InAppBrowser");
+                        LOG.d(LOG_TAG, "Making http request in LocalTunnel");
                         try {
                             result = makeHttpRequest(url, features, args);
                         } catch (JSONException ex) {
@@ -361,8 +361,8 @@ public class InAppBrowser extends CordovaPlugin {
      */
     @Override
     public void onPause(boolean multitasking) {
-        if (shouldPauseInAppBrowser) {
-            inAppWebView.onPause();
+        if (shouldPauseLocalTunnel) {
+            localTunnelWebView.onPause();
         }
     }
 
@@ -371,8 +371,8 @@ public class InAppBrowser extends CordovaPlugin {
      */
     @Override
     public void onResume(boolean multitasking) {
-        if (shouldPauseInAppBrowser) {
-            inAppWebView.onResume();
+        if (shouldPauseLocalTunnel) {
+            localTunnelWebView.onResume();
         }
     }
 
@@ -385,7 +385,7 @@ public class InAppBrowser extends CordovaPlugin {
     }
 
     /**
-     * Inject an object (script or style) into the InAppBrowser WebView.
+     * Inject an object (script or style) into the LocalTunnel WebView.
      *
      * This is a helper method for the inject{Script|Style}{Code|File} API calls, which
      * provides a consistent method for injecting JavaScript code into the document.
@@ -401,7 +401,7 @@ public class InAppBrowser extends CordovaPlugin {
      *                    which should be executed directly.
      */
     private void injectDeferredObject(String source, String jsWrapper) {
-        if (inAppWebView!=null) {
+        if (localTunnelWebView!=null) {
             String scriptToInject;
             if (jsWrapper != null) {
                 org.json.JSONArray jsonEsc = new org.json.JSONArray();
@@ -419,9 +419,9 @@ public class InAppBrowser extends CordovaPlugin {
                 public void run() {
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
                         // This action will have the side-effect of blurring the currently focused element
-                        inAppWebView.loadUrl("javascript:" + finalScriptToInject);
+                        localTunnelWebView.loadUrl("javascript:" + finalScriptToInject);
                     } else {
-                        inAppWebView.evaluateJavascript(finalScriptToInject, null);
+                        localTunnelWebView.evaluateJavascript(finalScriptToInject, null);
                     }
                 }
             });
@@ -481,7 +481,7 @@ public class InAppBrowser extends CordovaPlugin {
             return "";
             // not catching FileUriExposedException explicitly because buildtools<24 doesn't know about it
         } catch (java.lang.RuntimeException e) {
-            LOG.d(LOG_TAG, "InAppBrowser: Error loading url "+url+":"+ e.toString());
+            LOG.d(LOG_TAG, "LocalTunnel: Error loading url "+url+":"+ e.toString());
             return e.toString();
         }
     }
@@ -493,7 +493,7 @@ public class InAppBrowser extends CordovaPlugin {
         this.cordova.getActivity().runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                final WebView childView = inAppWebView;
+                final WebView childView = localTunnelWebView;
                 // The JS protects against multiple calls, so this should happen only when
                 // closeDialog() is called by other native code.
                 if (childView == null) {
@@ -534,8 +534,8 @@ public class InAppBrowser extends CordovaPlugin {
      * Checks to see if it is possible to go back one page in history, then does so.
      */
     public void goBack() {
-        if (this.inAppWebView.canGoBack()) {
-            this.inAppWebView.goBack();
+        if (this.localTunnelWebView.canGoBack()) {
+            this.localTunnelWebView.goBack();
         }
     }
 
@@ -544,7 +544,7 @@ public class InAppBrowser extends CordovaPlugin {
      * @return boolean
      */
     public boolean canGoBack() {
-        return this.inAppWebView.canGoBack();
+        return this.localTunnelWebView.canGoBack();
     }
 
     /**
@@ -559,8 +559,8 @@ public class InAppBrowser extends CordovaPlugin {
      * Checks to see if it is possible to go forward one page in history, then does so.
      */
     private void goForward() {
-        if (this.inAppWebView.canGoForward()) {
-            this.inAppWebView.goForward();
+        if (this.localTunnelWebView.canGoForward()) {
+            this.localTunnelWebView.goForward();
         }
     }
 
@@ -574,11 +574,11 @@ public class InAppBrowser extends CordovaPlugin {
         imm.hideSoftInputFromWindow(edittext.getWindowToken(), 0);
 
         if (!url.startsWith("http") && !url.startsWith("file:")) {
-            this.inAppWebView.loadUrl("http://" + url);
+            this.localTunnelWebView.loadUrl("http://" + url);
         } else {
-            this.inAppWebView.loadUrl(url);
+            this.localTunnelWebView.loadUrl(url);
         }
-        this.inAppWebView.requestFocus();
+        this.localTunnelWebView.requestFocus();
     }
 
 
@@ -591,7 +591,7 @@ public class InAppBrowser extends CordovaPlugin {
         return this.showLocationBar;
     }
 
-    private InAppBrowser getInAppBrowser(){
+    private LocalTunnel getLocalTunnel(){
         return this;
     }
 
@@ -653,7 +653,7 @@ public class InAppBrowser extends CordovaPlugin {
             }
             String shouldPause = features.get(SHOULD_PAUSE);
             if (shouldPause != null) {
-                shouldPauseInAppBrowser = shouldPause.equals("yes") ? true : false;
+                shouldPauseLocalTunnel = shouldPause.equals("yes") ? true : false;
             }
             String wideViewPort = features.get(USER_WIDE_VIEW_PORT);
             if (wideViewPort != null ) {
@@ -686,7 +686,7 @@ public class InAppBrowser extends CordovaPlugin {
         }
 
         final CordovaWebView thatWebView = this.webView;
-        final InAppBrowser thatIAB = this;
+        final LocalTunnel thatIAB = this;
 
         // Create dialog in new thread
         Runnable runnable = new Runnable() {
@@ -754,17 +754,17 @@ public class InAppBrowser extends CordovaPlugin {
             @SuppressLint("NewApi")
             public void run() {
 
-                // CB-6702 InAppBrowser hangs when opening more than one instance
+                // CB-6702 LocalTunnel hangs when opening more than one instance
                 if (dialog != null) {
                     dialog.dismiss();
                 };
 
                 // Let's create the main dialog
-                dialog = new InAppBrowserDialog(cordova.getActivity(), android.R.style.Theme_NoTitleBar);
+                dialog = new LocalTunnelDialog(cordova.getActivity(), android.R.style.Theme_NoTitleBar);
                 dialog.getWindow().getAttributes().windowAnimations = android.R.style.Animation_Dialog;
                 dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
                 dialog.setCancelable(true);
-                dialog.setInAppBroswer(getInAppBrowser());
+                dialog.setInAppBroswer(getLocalTunnel());
 
                 // Main container layout
                 LinearLayout main = new LinearLayout(cordova.getActivity());
@@ -888,11 +888,11 @@ public class InAppBrowser extends CordovaPlugin {
 
 
                 // WebView
-                inAppWebView = new WebView(cordova.getActivity());
-                inAppWebView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-                inAppWebView.setId(Integer.valueOf(6));
+                localTunnelWebView = new WebView(cordova.getActivity());
+                localTunnelWebView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+                localTunnelWebView.setId(Integer.valueOf(6));
                 // File Chooser Implemented ChromeClient
-                inAppWebView.setWebChromeClient(new InAppChromeClient(thatWebView, getInAppBrowser()) {
+                localTunnelWebView.setWebChromeClient(new LocalTunnelChromeClient(thatWebView, getLocalTunnel()) {
                     // For Android 5.0+
                     public boolean onShowFileChooser (WebView webView, ValueCallback<Uri[]> filePathCallback, WebChromeClient.FileChooserParams fileChooserParams)
                     {
@@ -909,7 +909,7 @@ public class InAppBrowser extends CordovaPlugin {
                         content.setType("*/*");
 
                         // Run cordova startActivityForResult
-                        cordova.startActivityForResult(InAppBrowser.this, Intent.createChooser(content, "Select File"), FILECHOOSER_REQUESTCODE_LOLLIPOP);
+                        cordova.startActivityForResult(LocalTunnel.this, Intent.createChooser(content, "Select File"), FILECHOOSER_REQUESTCODE_LOLLIPOP);
                         return true;
                     }
 
@@ -930,18 +930,18 @@ public class InAppBrowser extends CordovaPlugin {
                         content.addCategory(Intent.CATEGORY_OPENABLE);
 
                         // run startActivityForResult
-                        cordova.startActivityForResult(InAppBrowser.this, Intent.createChooser(content, "Select File"), FILECHOOSER_REQUESTCODE);
+                        cordova.startActivityForResult(LocalTunnel.this, Intent.createChooser(content, "Select File"), FILECHOOSER_REQUESTCODE);
                     }
 
                 });
-                WebViewClient client = new InAppBrowserClient(thatWebView, edittext);
-                inAppWebView.setWebViewClient(client);
-                WebSettings settings = inAppWebView.getSettings();
+                WebViewClient client = new LocalTunnelClient(thatWebView, edittext);
+                localTunnelWebView.setWebViewClient(client);
+                WebSettings settings = localTunnelWebView.getSettings();
                 settings.setJavaScriptEnabled(true);
                 settings.setJavaScriptCanOpenWindowsAutomatically(true);
                 settings.setBuiltInZoomControls(showZoomControls);
                 settings.setPluginState(android.webkit.WebSettings.PluginState.ON);
-                // inAppWebView.addJavascriptInterface(new HTMLViewerJavaScriptInterface(thatIAB), "HtmlViewer");
+                // localTunnelWebView.addJavascriptInterface(new HTMLViewerJavaScriptInterface(thatIAB), "HtmlViewer");
 
                 if(android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.JELLY_BEAN_MR1) {
                     settings.setMediaPlaybackRequiresUserGesture(mediaPlaybackRequiresUserGesture);
@@ -964,7 +964,7 @@ public class InAppBrowser extends CordovaPlugin {
 
                 //Toggle whether this is enabled or not!
                 Bundle appSettings = cordova.getActivity().getIntent().getExtras();
-                boolean enableDatabase = appSettings == null ? true : appSettings.getBoolean("InAppBrowserStorageEnabled", true);
+                boolean enableDatabase = appSettings == null ? true : appSettings.getBoolean("LocalTunnelStorageEnabled", true);
                 if (enableDatabase) {
                     String databasePath = cordova.getActivity().getApplicationContext().getDir("inAppBrowserDB", Context.MODE_PRIVATE).getPath();
                     settings.setDatabasePath(databasePath);
@@ -980,15 +980,15 @@ public class InAppBrowser extends CordovaPlugin {
 
                 // Enable Thirdparty Cookies on >=Android 5.0 device
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-                    CookieManager.getInstance().setAcceptThirdPartyCookies(inAppWebView,true);
+                    CookieManager.getInstance().setAcceptThirdPartyCookies(localTunnelWebView,true);
                 }
 
-                inAppWebView.loadUrl(url);
-                inAppWebView.setId(Integer.valueOf(6));
-                inAppWebView.getSettings().setLoadWithOverviewMode(true);
-                inAppWebView.getSettings().setUseWideViewPort(useWideViewPort);
-                inAppWebView.requestFocus();
-                inAppWebView.requestFocusFromTouch();
+                localTunnelWebView.loadUrl(url);
+                localTunnelWebView.setId(Integer.valueOf(6));
+                localTunnelWebView.getSettings().setLoadWithOverviewMode(true);
+                localTunnelWebView.getSettings().setUseWideViewPort(useWideViewPort);
+                localTunnelWebView.requestFocus();
+                localTunnelWebView.requestFocusFromTouch();
 
                 // Add the back and forward buttons to our action button container layout
                 actionButtonContainer.addView(back);
@@ -1006,7 +1006,7 @@ public class InAppBrowser extends CordovaPlugin {
 
                 // Add our webview to our main view/layout
                 RelativeLayout webViewLayout = new RelativeLayout(cordova.getActivity());
-                webViewLayout.addView(inAppWebView);
+                webViewLayout.addView(localTunnelWebView);
                 main.addView(webViewLayout);
 
                 // Don't add the footer unless it's been enabled
@@ -1059,7 +1059,7 @@ public class InAppBrowser extends CordovaPlugin {
         final String userAgent = captchaOptions.getString("useragent");
         final Boolean captchaHidden = captchaOptions.getBoolean("hidden");
         final CordovaWebView thatWebView = this.webView;
-        final InAppBrowser thatIAB = this;
+        final LocalTunnel thatIAB = this;
         captchaUrl = url;
 
         // Create dialog in new thread
@@ -1075,7 +1075,7 @@ public class InAppBrowser extends CordovaPlugin {
             public void run() {
                 CookieManager cookieManager = CookieManager.getInstance();
 
-                // CB-6702 InAppBrowser hangs when opening more than one instance
+                // CB-6702 LocalTunnel hangs when opening more than one instance
                 if (dialog != null) {
                     dialog.dismiss();
                     dialog = null;
@@ -1086,25 +1086,25 @@ public class InAppBrowser extends CordovaPlugin {
                     edittext = new EditText(cordova.getActivity());
 
                     // Let's create the main dialog
-                    dialog = new InAppBrowserDialog(cordova.getActivity(), android.R.style.Theme_NoTitleBar);
+                    dialog = new LocalTunnelDialog(cordova.getActivity(), android.R.style.Theme_NoTitleBar);
                     dialog.getWindow().getAttributes().windowAnimations = android.R.style.Animation_Dialog;
                     dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
                     dialog.setCancelable(true);
-                    dialog.setInAppBroswer(getInAppBrowser());
+                    dialog.setInAppBroswer(getLocalTunnel());
 
                     // Main container layout
                     LinearLayout main = new LinearLayout(cordova.getActivity());
                     main.setOrientation(LinearLayout.VERTICAL);
 
                     // WebView
-                    inAppWebView = new WebView(cordova.getActivity());
-                    inAppWebView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-                    inAppWebView.setId(Integer.valueOf(6));
+                    localTunnelWebView = new WebView(cordova.getActivity());
+                    localTunnelWebView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+                    localTunnelWebView.setId(Integer.valueOf(6));
 
-                    inAppWebView.setWebChromeClient(new InAppChromeClient(thatWebView, getInAppBrowser()));
-                    WebViewClient client = new InAppBrowserClient(thatWebView, edittext);
-                    inAppWebView.setWebViewClient(client);
-                    WebSettings settings = inAppWebView.getSettings();
+                    localTunnelWebView.setWebChromeClient(new LocalTunnelChromeClient(thatWebView, getLocalTunnel()));
+                    WebViewClient client = new LocalTunnelClient(thatWebView, edittext);
+                    localTunnelWebView.setWebViewClient(client);
+                    WebSettings settings = localTunnelWebView.getSettings();
                     settings.setJavaScriptEnabled(true);
                     settings.setJavaScriptCanOpenWindowsAutomatically(true);
                     settings.setBuiltInZoomControls(false);
@@ -1117,7 +1117,7 @@ public class InAppBrowser extends CordovaPlugin {
 
                     //Toggle whether this is enabled or not!
                     Bundle appSettings = cordova.getActivity().getIntent().getExtras();
-                    boolean enableDatabase = appSettings == null ? true : appSettings.getBoolean("InAppBrowserStorageEnabled", true);
+                    boolean enableDatabase = appSettings == null ? true : appSettings.getBoolean("LocalTunnelStorageEnabled", true);
                     if (enableDatabase) {
                         String databasePath = cordova.getActivity().getApplicationContext().getDir("inAppBrowserDB", Context.MODE_PRIVATE).getPath();
                         settings.setDatabasePath(databasePath);
@@ -1126,16 +1126,16 @@ public class InAppBrowser extends CordovaPlugin {
                     settings.setDomStorageEnabled(true);
 
                     captchaUrl = "about:blank";
-                    inAppWebView.loadDataWithBaseURL(url, content, "text/html", "UTF-8", null);
-                    inAppWebView.setId(Integer.valueOf(6));
-                    inAppWebView.getSettings().setLoadWithOverviewMode(true);
-                    inAppWebView.getSettings().setUseWideViewPort(useWideViewPort);
-                    inAppWebView.requestFocus();
-                    inAppWebView.requestFocusFromTouch();
+                    localTunnelWebView.loadDataWithBaseURL(url, content, "text/html", "UTF-8", null);
+                    localTunnelWebView.setId(Integer.valueOf(6));
+                    localTunnelWebView.getSettings().setLoadWithOverviewMode(true);
+                    localTunnelWebView.getSettings().setUseWideViewPort(useWideViewPort);
+                    localTunnelWebView.requestFocus();
+                    localTunnelWebView.requestFocusFromTouch();
 
                     // Add our webview to our main view/layout
                     RelativeLayout webViewLayout = new RelativeLayout(cordova.getActivity());
-                    webViewLayout.addView(inAppWebView);
+                    webViewLayout.addView(localTunnelWebView);
                     main.addView(webViewLayout);
 
                     WindowManager.LayoutParams lp = new WindowManager.LayoutParams();
@@ -1173,7 +1173,7 @@ public class InAppBrowser extends CordovaPlugin {
         final String userAgent = requestOptions.getString("useragent");
 
         final CordovaWebView thatWebView = this.webView;
-        final InAppBrowser thatIAB = this;
+        final LocalTunnel thatIAB = this;
 
         requestUrl = url;
         lastRequestUrl = url;
@@ -1201,34 +1201,34 @@ public class InAppBrowser extends CordovaPlugin {
 
                 CookieManager cookieManager = CookieManager.getInstance();
 
-                // CB-6702 InAppBrowser hangs when opening more than one instance
+                // CB-6702 LocalTunnel hangs when opening more than one instance
                 // ram: Create a new thing called tunnel dialog.
                 if (dialog == null) {
                     // Edit Text Box
                     edittext = new EditText(cordova.getActivity());
 
                     // Let's create the main dialog
-                    dialog = new InAppBrowserDialog(cordova.getActivity(), android.R.style.Theme_NoTitleBar);
+                    dialog = new LocalTunnelDialog(cordova.getActivity(), android.R.style.Theme_NoTitleBar);
                     dialog.getWindow().getAttributes().windowAnimations = android.R.style.Animation_Dialog;
                     dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
                     dialog.setCancelable(true);
-                    dialog.setInAppBroswer(getInAppBrowser());
+                    dialog.setInAppBroswer(getLocalTunnel());
 
                     // Main container layout
                     LinearLayout main = new LinearLayout(cordova.getActivity());
                     main.setOrientation(LinearLayout.VERTICAL);
 
                     // WebView
-                    inAppWebView = new WebView(cordova.getActivity());
-                    inAppWebView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-                    inAppWebView.setId(Integer.valueOf(6));
+                    localTunnelWebView = new WebView(cordova.getActivity());
+                    localTunnelWebView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+                    localTunnelWebView.setId(Integer.valueOf(6));
 
-                    inAppWebView.setWebChromeClient(new InAppChromeClient(thatWebView, getInAppBrowser()));
-                    WebViewClient client = new InAppBrowserClient(thatWebView, edittext);
-                    inAppWebView.setWebViewClient(client);
-                    WebSettings settings = inAppWebView.getSettings();
+                    localTunnelWebView.setWebChromeClient(new LocalTunnelChromeClient(thatWebView, getLocalTunnel()));
+                    WebViewClient client = new LocalTunnelClient(thatWebView, edittext);
+                    localTunnelWebView.setWebViewClient(client);
+                    WebSettings settings = localTunnelWebView.getSettings();
                     settings.setJavaScriptEnabled(true);
-                    // inAppWebView.addJavascriptInterface(new HTMLViewerJavaScriptInterface(), "HtmlViewer");
+                    // localTunnelWebView.addJavascriptInterface(new HTMLViewerJavaScriptInterface(), "HtmlViewer");
                     settings.setJavaScriptCanOpenWindowsAutomatically(true);
                     settings.setBuiltInZoomControls(false);
                     settings.setPluginState(android.webkit.WebSettings.PluginState.ON);
@@ -1240,7 +1240,7 @@ public class InAppBrowser extends CordovaPlugin {
 
                     //Toggle whether this is enabled or not!
                     Bundle appSettings = cordova.getActivity().getIntent().getExtras();
-                    boolean enableDatabase = appSettings == null ? true : appSettings.getBoolean("InAppBrowserStorageEnabled", true);
+                    boolean enableDatabase = appSettings == null ? true : appSettings.getBoolean("LocalTunnelStorageEnabled", true);
                     if (enableDatabase) {
                         String databasePath = cordova.getActivity().getApplicationContext().getDir("inAppBrowserDB", Context.MODE_PRIVATE).getPath();
                         settings.setDatabasePath(databasePath);
@@ -1248,15 +1248,15 @@ public class InAppBrowser extends CordovaPlugin {
                     }
                     settings.setDomStorageEnabled(true);
 
-                    inAppWebView.setId(Integer.valueOf(6));
-                    inAppWebView.getSettings().setLoadWithOverviewMode(true);
-                    inAppWebView.getSettings().setUseWideViewPort(useWideViewPort);
-                    inAppWebView.requestFocus();
-                    inAppWebView.requestFocusFromTouch();
+                    localTunnelWebView.setId(Integer.valueOf(6));
+                    localTunnelWebView.getSettings().setLoadWithOverviewMode(true);
+                    localTunnelWebView.getSettings().setUseWideViewPort(useWideViewPort);
+                    localTunnelWebView.requestFocus();
+                    localTunnelWebView.requestFocusFromTouch();
 
                     // Add our webview to our main view/layout
                     RelativeLayout webViewLayout = new RelativeLayout(cordova.getActivity());
-                    webViewLayout.addView(inAppWebView);
+                    webViewLayout.addView(localTunnelWebView);
                     main.addView(webViewLayout);
 
                     WindowManager.LayoutParams lp = new WindowManager.LayoutParams();
@@ -1266,7 +1266,7 @@ public class InAppBrowser extends CordovaPlugin {
 
                     // Enable Thirdparty Cookies on >=Android 5.0 device
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-                        cookieManager.setAcceptThirdPartyCookies(inAppWebView, true);
+                        cookieManager.setAcceptThirdPartyCookies(localTunnelWebView, true);
                     }
 
                     dialog.setContentView(main);
@@ -1275,7 +1275,7 @@ public class InAppBrowser extends CordovaPlugin {
                 }
 
                 if (method.equals("get")) {
-                    inAppWebView.loadUrl(url);
+                    localTunnelWebView.loadUrl(url);
                 } else if (method.equals("post")) {
                     List<String> postDataList = new ArrayList<String>();
                     Iterator<String> params = requestParams.keys();
@@ -1298,7 +1298,7 @@ public class InAppBrowser extends CordovaPlugin {
                         }
                         postData += str;
                     }
-                    inAppWebView.postUrl(url, postData.getBytes());
+                    localTunnelWebView.postUrl(url, postData.getBytes());
                 }
 
                 if(openWindowHidden) {
@@ -1375,7 +1375,7 @@ public class InAppBrowser extends CordovaPlugin {
     /**
      * The webview client receives notifications about appView
      */
-    public class InAppBrowserClient extends WebViewClient {
+    public class LocalTunnelClient extends WebViewClient {
         EditText edittext;
         CordovaWebView webView;
 
@@ -1385,7 +1385,7 @@ public class InAppBrowser extends CordovaPlugin {
          * @param webView
          * @param mEditText
          */
-        public InAppBrowserClient(CordovaWebView webView, EditText mEditText) {
+        public LocalTunnelClient(CordovaWebView webView, EditText mEditText) {
             this.webView = webView;
             this.edittext = mEditText;
         }
@@ -1574,7 +1574,7 @@ public class InAppBrowser extends CordovaPlugin {
         public void onPageFinished(WebView view, String url) {
             super.onPageFinished(view, url);
 
-            // CB-10395 InAppBrowser's WebView not storing cookies reliable to local device storage
+            // CB-10395 LocalTunnel's WebView not storing cookies reliable to local device storage
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
                 CookieManager.getInstance().flush();
             } else {

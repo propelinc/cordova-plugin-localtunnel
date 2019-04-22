@@ -27,12 +27,12 @@
     #import <Cordova/CDVWebViewDelegate.h>
 #endif
 
-@class CDVInAppBrowserViewController;
+@class CDVLocalTunnelViewController;
 
-@interface CDVInAppBrowser : CDVPlugin {
+@interface CDVLocalTunnel : CDVPlugin {
 }
 
-@property (nonatomic, retain) CDVInAppBrowserViewController* inAppBrowserViewController;
+@property (nonatomic, retain) CDVLocalTunnelViewController* inAppBrowserViewController;
 @property (nonatomic, copy) NSString* loadedUrl;
 @property (nonatomic, copy) NSString* callbackId;
 @property (nonatomic, copy) NSRegularExpression *callbackIdPattern;
@@ -45,7 +45,7 @@
 
 @end
 
-@interface CDVInAppBrowserOptions : NSObject {}
+@interface CDVLocalTunnelOptions : NSObject {}
 
 @property (nonatomic, assign) BOOL location;
 @property (nonatomic, assign) BOOL toolbar;
@@ -69,16 +69,16 @@
 @property (nonatomic, assign) BOOL hidden;
 @property (nonatomic, assign) BOOL disallowoverscroll;
 
-+ (CDVInAppBrowserOptions*)parseOptions:(NSString*)options;
++ (CDVLocalTunnelOptions*)parseOptions:(NSString*)options;
 
 @end
 
-@interface CDVInAppBrowserViewController : UIViewController <UIWebViewDelegate, CDVScreenOrientationDelegate>{
+@interface CDVLocalTunnelViewController : UIViewController <UIWebViewDelegate, CDVScreenOrientationDelegate>{
     @private
     NSString* _userAgent;
     NSString* _prevUserAgent;
     NSInteger _userAgentLockToken;
-    CDVInAppBrowserOptions *_browserOptions;
+    CDVLocalTunnelOptions *_browserOptions;
 
 #ifdef __CORDOVA_4_0_0
     CDVUIWebViewDelegate* _webViewDelegate;
@@ -97,7 +97,7 @@
 @property (nonatomic, strong) IBOutlet UIToolbar* toolbar;
 
 @property (nonatomic, weak) id <CDVScreenOrientationDelegate> orientationDelegate;
-@property (nonatomic, weak) CDVInAppBrowser* navigationDelegate;
+@property (nonatomic, weak) CDVLocalTunnel* navigationDelegate;
 @property (nonatomic) NSURL* currentURL;
 
 - (void)close;
@@ -108,11 +108,11 @@
 - (void)showToolBar:(BOOL)show : (NSString *) toolbarPosition;
 - (void)setCloseButtonTitle:(NSString*)title : (NSString*) colorString;
 
-- (id)initWithUserAgent:(NSString*)userAgent prevUserAgent:(NSString*)prevUserAgent browserOptions: (CDVInAppBrowserOptions*) browserOptions;
+- (id)initWithUserAgent:(NSString*)userAgent prevUserAgent:(NSString*)prevUserAgent browserOptions: (CDVLocalTunnelOptions*) browserOptions;
 
 @end
 
-@interface CDVInAppBrowserNavigationController : UINavigationController
+@interface CDVLocalTunnelNavigationController : UINavigationController
 
 @property (nonatomic, weak) id <CDVScreenOrientationDelegate> orientationDelegate;
 

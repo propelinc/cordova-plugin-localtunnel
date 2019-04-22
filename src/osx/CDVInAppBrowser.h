@@ -19,7 +19,7 @@
 
 #import <Cordova/CDVPlugin.h>
 
-@interface CDVInAppBrowser : CDVPlugin {
+@interface CDVLocalTunnel : CDVPlugin {
 }
 
 @property (nonatomic, copy) NSString* callbackId;

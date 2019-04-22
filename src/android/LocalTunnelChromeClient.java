@@ -16,7 +16,7 @@
        specific language governing permissions and limitations
        under the License.
 */
-package org.apache.cordova.inappbrowser;
+package org.apache.cordova.localtunnel;
 
 import org.apache.cordova.CordovaWebView;
 import org.apache.cordova.LOG;
@@ -32,14 +32,14 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.GeolocationPermissions.Callback;
 
-public class InAppChromeClient extends WebChromeClient {
+public class LocalTunnelChromeClient extends WebChromeClient {
 
     private CordovaWebView webView;
-    private InAppBrowser iab;
-    private String LOG_TAG = "InAppChromeClient";
+    private LocalTunnel iab;
+    private String LOG_TAG = "LocalTunnelChromeClient";
     private long MAX_QUOTA = 100 * 1024 * 1024;
 
-    public InAppChromeClient(CordovaWebView webView, InAppBrowser iab) {
+    public LocalTunnelChromeClient(CordovaWebView webView, LocalTunnel iab) {
         super();
         this.webView = webView;
         this.iab = iab;
@@ -79,8 +79,8 @@ public class InAppChromeClient extends WebChromeClient {
      * If the client returns true, WebView will assume that the client will
      * handle the prompt dialog and call the appropriate JsPromptResult method.
      *
-     * The prompt bridge provided for the InAppBrowser is capable of executing any
-     * oustanding callback belonging to the InAppBrowser plugin. Care has been
+     * The prompt bridge provided for the LocalTunnel is capable of executing any
+     * oustanding callback belonging to the LocalTunnel plugin. Care has been
      * taken that other callbacks cannot be triggered, and that no other code
      * execution is possible.
      *
@@ -89,7 +89,7 @@ public class InAppChromeClient extends WebChromeClient {
      * gap-iab://<callbackId>
      *
      * where <callbackId> is the string id of the callback to trigger (something
-     * like "InAppBrowser0123456789")
+     * like "LocalTunnel0123456789")
      *
      * If present, the prompt message is expected to be a JSON-encoded value to
      * pass to the callback. A JSON_EXCEPTION is returned if the JSON is invalid.
@@ -107,7 +107,7 @@ public class InAppChromeClient extends WebChromeClient {
             if(defaultValue.startsWith("gap-iab://")) {
                 PluginResult scriptResult;
                 String scriptCallbackId = defaultValue.substring(10);
-                if (scriptCallbackId.startsWith("InAppBrowser")) {
+                if (scriptCallbackId.startsWith("LocalTunnel")) {
                     if(message == null || message.length() == 0) {
                         scriptResult = new PluginResult(PluginResult.Status.OK, new JSONArray());
                     } else {
@@ -125,7 +125,7 @@ public class InAppChromeClient extends WebChromeClient {
             else
             {
                 // Anything else with a gap: prefix should get this message
-                LOG.w(LOG_TAG, "InAppBrowser does not support Cordova API calls: " + url + " " + defaultValue); 
+                LOG.w(LOG_TAG, "LocalTunnel does not support Cordova API calls: " + url + " " + defaultValue); 
                 result.cancel();
                 return true;
             }
@@ -145,9 +145,9 @@ public class InAppChromeClient extends WebChromeClient {
      */
     @Override
     public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
-        LOG.d(LOG_TAG, "Alert received in InAppBrowser"); 
+        LOG.d(LOG_TAG, "Alert received in LocalTunnel"); 
         if (iab.requestUrl != null || url.equals(iab.lastRequestUrl)) {
-            LOG.d(LOG_TAG, "Suppressing alert in InAppBrowser"); 
+            LOG.d(LOG_TAG, "Suppressing alert in LocalTunnel"); 
             result.confirm();
             return true;
         }

@@ -16,7 +16,7 @@
        specific language governing permissions and limitations
        under the License.
 */
-package org.apache.cordova.inappbrowser;
+package org.apache.cordova.localtunnel;
 
 import android.app.AlertDialog;
 import android.app.Dialog;
@@ -28,29 +28,29 @@ import org.json.JSONObject;
 /**
  * Created by Oliver on 22/11/2013.
  */
-public class InAppBrowserDialog extends Dialog {
+public class LocalTunnelDialog extends Dialog {
     Context context;
-    InAppBrowser inAppBrowser = null;
+    LocalTunnel localTunnel = null;
 
-    public InAppBrowserDialog(Context context, int theme) {
+    public LocalTunnelDialog(Context context, int theme) {
         super(context, theme);
         this.context = context;
     }
 
-    public void setInAppBroswer(InAppBrowser browser) {
-        this.inAppBrowser = browser;
+    public void setInAppBroswer(LocalTunnel browser) {
+        this.localTunnel = browser;
     }
 
     public void onBackPressed () {
-        if (this.inAppBrowser == null) {
+        if (this.localTunnel == null) {
             this.dismiss();
         } else {
-            // better to go through the in inAppBrowser
+            // better to go through the in localTunnel
             // because it does a clean up
-            if (this.inAppBrowser.hardwareBack() && this.inAppBrowser.canGoBack()) {
-                this.inAppBrowser.goBack();
+            if (this.localTunnel.hardwareBack() && this.localTunnel.canGoBack()) {
+                this.localTunnel.goBack();
             }  else {
-                this.inAppBrowser.closeDialog();
+                this.localTunnel.closeDialog();
             }
         }
     }

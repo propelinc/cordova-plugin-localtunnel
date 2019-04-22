@@ -19,13 +19,13 @@
 -->
 
 <plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
-           id="cordova-plugin-inappbrowser"
+           id="cordova-plugin-localtunnel"
       version="2.0.3-dev">
 
-    <name>InAppBrowser</name>
-    <description>Cordova InAppBrowser Plugin</description>
+    <name>LocalTunnel</name>
+    <description>Cordova Localtunnel Plugin</description>
     <license>Apache 2.0</license>
-    <keywords>cordova,in,app,browser,inappbrowser</keywords>
+    <keywords>cordova</keywords>
     <repo>https://git-wip-us.apache.org/repos/asf/cordova-plugin-inappbrowser.git</repo>
     <issue>https://issues.apache.org/jira/browse/CB/component/12320641</issue>
 
@@ -35,19 +35,18 @@
 
     <!-- android -->
     <platform name="android">
-        <js-module src="www/inappbrowser.js" name="inappbrowser">
-            <clobbers target="cordova.InAppBrowser.open" />
-            <clobbers target="window.open" />
+        <js-module src="www/localtunnel.js" name="localtunnel">
+            <clobbers target="cordova.LocalTunnel.open" />
         </js-module>
         <config-file target="res/xml/config.xml" parent="/*">
-            <feature name="InAppBrowser">
-                <param name="android-package" value="org.apache.cordova.inappbrowser.InAppBrowser"/>
+            <feature name="LocalTunnel">
+                <param name="android-package" value="org.apache.cordova.localtunnel.LocalTunnel"/>
             </feature>
         </config-file>
 
-        <source-file src="src/android/InAppBrowser.java" target-dir="src/org/apache/cordova/inappbrowser" />
-        <source-file src="src/android/InAppBrowserDialog.java" target-dir="src/org/apache/cordova/inappbrowser" />
-        <source-file src="src/android/InAppChromeClient.java" target-dir="src/org/apache/cordova/inappbrowser" />
+        <source-file src="src/android/LocalTunnel.java" target-dir="src/org/apache/cordova/localtunnel" />
+        <source-file src="src/android/LocalTunnelDialog.java" target-dir="src/org/apache/cordova/localtunnel" />
+        <source-file src="src/android/LocalTunnelClient.java" target-dir="src/org/apache/cordova/localtunnel" />
 
         <!--  drawable src/android/resources -->
         <resource-file src="src/android/res/drawable-hdpi/ic_action_next_item.png" target="res/drawable-hdpi/ic_action_next_item.png" />
@@ -69,61 +68,21 @@
 
     <!-- ios -->
     <platform name="ios">
-        <js-module src="www/inappbrowser.js" name="inappbrowser">
-            <clobbers target="cordova.InAppBrowser.open" />
-            <clobbers target="window.open" />
+        <js-module src="www/localtunnel.js" name="localtunnel">
+            <clobbers target="cordova.LocalTunnel.open" />
         </js-module>
         <config-file target="config.xml" parent="/*">
-            <feature name="InAppBrowser">
-                <param name="ios-package" value="CDVInAppBrowser" />
+            <feature name="LocalTunnel">
+                <param name="ios-package" value="CDVLocalTunnel" />
             </feature>
         </config-file>
 
-        <header-file src="src/ios/CDVInAppBrowser.h" />
-	    <source-file src="src/ios/CDVInAppBrowser.m" />
+        <header-file src="src/ios/CDVLocalTunnel.h" />
+	    <source-file src="src/ios/CDVLocalTunnel.m" />
 
         <header-file src="src/ios/swizzling.h" />
 	    <source-file src="src/ios/swizzling.m" />
 
 	    <framework src="CoreGraphics.framework" />
-    </platform>
-
-    <!-- osx -->
-    <platform name="osx">
-        <js-module src="www/inappbrowser.js" name="inappbrowser">
-            <clobbers target="cordova.InAppBrowser.open" />
-            <clobbers target="window.open" />
-        </js-module>
-        <config-file target="config.xml" parent="/*">
-            <feature name="InAppBrowser">
-                <param name="osx-package" value="CDVInAppBrowser" />
-            </feature>
-        </config-file>
-
-        <header-file src="src/osx/CDVInAppBrowser.h" />
-        <source-file src="src/osx/CDVInAppBrowser.m" />
-    </platform>
-
-    <!-- windows universal apps (Windows 8.1, Windows Phone 8.1, Windows 8.0) -->
-    <platform name="windows">
-        <js-module src="www/inappbrowser.js" name="inappbrowser">
-            <clobbers target="cordova.InAppBrowser.open" />
-            <clobbers target="window.open" />
-        </js-module>
-        <js-module src="src/windows/InAppBrowserProxy.js" name="InAppBrowserProxy">
-            <runs />
-        </js-module>
-        <asset src="www/inappbrowser.css" target="css/inappbrowser.css" />
-    </platform>
-
-    <!-- browser -->
-    <platform name="browser">
-        <js-module src="www/inappbrowser.js" name="inappbrowser">
-            <clobbers target="cordova.InAppBrowser.open" />
-            <clobbers target="window.open" />
-        </js-module>
-        <js-module src="src/browser/InAppBrowserProxy.js" name="InAppBrowserProxy">
-            <runs />
-        </js-module>
     </platform>
 </plugin>

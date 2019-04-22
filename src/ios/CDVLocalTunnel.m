@@ -17,7 +17,7 @@
  under the License.
  */
 
-#import "CDVInAppBrowser.h"
+#import "CDVLocalTunnel.h"
 #import <Cordova/CDVPluginResult.h>
 #import <Cordova/CDVUserAgentUtil.h>
 
@@ -45,7 +45,7 @@ static int captchaCount = 0;
 static bool enableRequestBlocking = false;
 
 
-#pragma mark CDVInAppBrowser
+#pragma mark CDVLocalTunnel
 
 @interface BlockAllRequestsProtocol : NSURLProtocol
 @end
@@ -81,7 +81,7 @@ static bool enableRequestBlocking = false;
 @end
 
 
-@interface CDVInAppBrowser () {
+@interface CDVLocalTunnel () {
     NSInteger _previousStatusBarStyle;
 }
 @end
@@ -104,7 +104,7 @@ static void swizzle_show(UIAlertView *self, SEL _cmd)
 }
 @end
 
-@implementation CDVInAppBrowser
+@implementation CDVLocalTunnel
 
 static NSString *toString(id object) {
     return [NSString stringWithFormat: @"%@", object];
@@ -216,7 +216,7 @@ static NSString *urlEncode(id object) {
 
 - (void)openInInAppBrowser:(NSURL*)url withOptions:(NSString*)options
 {
-    CDVInAppBrowserOptions* browserOptions = [CDVInAppBrowserOptions parseOptions:options];
+    CDVLocalTunnelOptions* browserOptions = [CDVLocalTunnelOptions parseOptions:options];
 
     enableRequestBlocking = false;
     requestUrl = nil;
@@ -260,7 +260,7 @@ static NSString *urlEncode(id object) {
         if(appendUserAgent){
             userAgent = [userAgent stringByAppendingString: appendUserAgent];
         }
-        self.inAppBrowserViewController = [[CDVInAppBrowserViewController alloc] initWithUserAgent:userAgent prevUserAgent:[self.commandDelegate userAgent] browserOptions: browserOptions];
+        self.inAppBrowserViewController = [[CDVLocalTunnelViewController alloc] initWithUserAgent:userAgent prevUserAgent:[self.commandDelegate userAgent] browserOptions: browserOptions];
         self.inAppBrowserViewController.navigationDelegate = self;
 
         if ([self.viewController conformsToProtocol:@protocol(CDVScreenOrientationDelegate)]) {
@@ -326,8 +326,8 @@ static NSString *urlEncode(id object) {
 
 - (void)openCaptchaInInAppBrowser:(NSURL*)url withOptions:(NSString*)options withCaptcha:captcha
 {
-    CDVInAppBrowserOptions* browserOptions = [
-        CDVInAppBrowserOptions parseOptions:@"location=no,toolbar=yes,disallowoverscroll=yes"];
+    CDVLocalTunnelOptions* browserOptions = [
+        CDVLocalTunnelOptions parseOptions:@"location=no,toolbar=yes,disallowoverscroll=yes"];
 
     NSDictionary* captchaCookies = [captcha objectForKey:@"cookies"];
     NSString* content = [captcha objectForKey:@"content"];
@@ -340,7 +340,7 @@ static NSString *urlEncode(id object) {
     enableRequestBlocking = false;
 
     if (self.inAppBrowserViewController == nil) {
-        self.inAppBrowserViewController = [[CDVInAppBrowserViewController alloc] initWithUserAgent:userAgent prevUserAgent:[self.commandDelegate userAgent] browserOptions: browserOptions];
+        self.inAppBrowserViewController = [[CDVLocalTunnelViewController alloc] initWithUserAgent:userAgent prevUserAgent:[self.commandDelegate userAgent] browserOptions: browserOptions];
         self.inAppBrowserViewController.navigationDelegate = self;
 
         if ([self.viewController conformsToProtocol:@protocol(CDVScreenOrientationDelegate)]) {
@@ -407,7 +407,7 @@ static NSString *urlEncode(id object) {
 
 - (void)openRequestInInAppBrowser:(NSURL*)url withOptions:(NSString*)options withRequest:request
 {
-    CDVInAppBrowserOptions* browserOptions = [CDVInAppBrowserOptions parseOptions:options];
+    CDVLocalTunnelOptions* browserOptions = [CDVLocalTunnelOptions parseOptions:options];
     NSDictionary* requestCookies = [request objectForKey:@"cookies"];
     NSDictionary* requestParams = [request objectForKey:@"params"];
     NSString* method = [request objectForKey:@"method"];
@@ -420,7 +420,7 @@ static NSString *urlEncode(id object) {
     captchaCount = 0;
 
     if (self.inAppBrowserViewController == nil) {
-        self.inAppBrowserViewController = [[CDVInAppBrowserViewController alloc] initWithUserAgent:userAgent prevUserAgent:[self.commandDelegate userAgent] browserOptions: browserOptions];
+        self.inAppBrowserViewController = [[CDVLocalTunnelViewController alloc] initWithUserAgent:userAgent prevUserAgent:[self.commandDelegate userAgent] browserOptions: browserOptions];
         self.inAppBrowserViewController.navigationDelegate = self;
 
         if ([self.viewController conformsToProtocol:@protocol(CDVScreenOrientationDelegate)]) {
@@ -527,13 +527,13 @@ static NSString *urlEncode(id object) {
 
     _previousStatusBarStyle = [UIApplication sharedApplication].statusBarStyle;
 
-    __block CDVInAppBrowserNavigationController* nav = [[CDVInAppBrowserNavigationController alloc]
+    __block CDVLocalTunnelNavigationController* nav = [[CDVLocalTunnelNavigationController alloc]
                                                         initWithRootViewController:self.inAppBrowserViewController];
     nav.orientationDelegate = self.inAppBrowserViewController;
     nav.navigationBarHidden = YES;
     nav.modalPresentationStyle = self.inAppBrowserViewController.modalPresentationStyle;
 
-    __weak CDVInAppBrowser* weakSelf = self;
+    __weak CDVLocalTunnel* weakSelf = self;
 
     // Run later to avoid the "took a long time" log message.
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -608,7 +608,7 @@ static NSString *urlEncode(id object) {
 
 - (void)injectDeferredObject:(NSString*)source withWrapper:(NSString*)jsWrapper
 {
-    // Ensure an iframe bridge is created to communicate with the CDVInAppBrowserViewController
+    // Ensure an iframe bridge is created to communicate with the CDVLocalTunnelViewController
     [self.inAppBrowserViewController.webView stringByEvaluatingJavaScriptFromString:@"(function(d){_cdvIframeBridge=d.getElementById('_cdvIframeBridge');if(!_cdvIframeBridge) {var e = _cdvIframeBridge = d.createElement('iframe');e.id='_cdvIframeBridge'; e.style.display='none'; d.body = d.body || d.createElement('body'); d.body.appendChild(e);}})(document)"];
 
     if (jsWrapper != nil) {
@@ -857,13 +857,13 @@ static NSString *urlEncode(id object) {
 
 @end
 
-#pragma mark CDVInAppBrowserViewController
+#pragma mark CDVLocalTunnelViewController
 
-@implementation CDVInAppBrowserViewController
+@implementation CDVLocalTunnelViewController
 
 @synthesize currentURL;
 
-- (id)initWithUserAgent:(NSString*)userAgent prevUserAgent:(NSString*)prevUserAgent browserOptions: (CDVInAppBrowserOptions*) browserOptions
+- (id)initWithUserAgent:(NSString*)userAgent prevUserAgent:(NSString*)prevUserAgent browserOptions: (CDVLocalTunnelOptions*) browserOptions
 {
     self = [super init];
     if (self != nil) {
@@ -1193,7 +1193,7 @@ static NSString *urlEncode(id object) {
     if (_userAgentLockToken != 0) {
         [self.webView loadRequest :request];
     } else {
-        __weak CDVInAppBrowserViewController* weakSelf = self;
+        __weak CDVLocalTunnelViewController* weakSelf = self;
         [CDVUserAgentUtil acquireLock:^(NSInteger lockToken) {
             _userAgentLockToken = lockToken;
             [CDVUserAgentUtil setUserAgent:_userAgent lockToken:lockToken];
@@ -1207,7 +1207,7 @@ static NSString *urlEncode(id object) {
     if (_userAgentLockToken != 0) {
         [self.webView loadHTMLString :content baseURL:url];
     } else {
-        __weak CDVInAppBrowserViewController* weakSelf = self;
+        __weak CDVLocalTunnelViewController* weakSelf = self;
         [CDVUserAgentUtil acquireLock:^(NSInteger lockToken) {
             _userAgentLockToken = lockToken;
             [CDVUserAgentUtil setUserAgent:_userAgent lockToken:lockToken];
@@ -1223,7 +1223,7 @@ static NSString *urlEncode(id object) {
     if (_userAgentLockToken != 0) {
         [self.webView loadRequest:request];
     } else {
-        __weak CDVInAppBrowserViewController* weakSelf = self;
+        __weak CDVLocalTunnelViewController* weakSelf = self;
         [CDVUserAgentUtil acquireLock:^(NSInteger lockToken) {
             _userAgentLockToken = lockToken;
             [CDVUserAgentUtil setUserAgent:_userAgent lockToken:lockToken];
@@ -1379,7 +1379,7 @@ static NSString *urlEncode(id object) {
 
 @end
 
-@implementation CDVInAppBrowserOptions
+@implementation CDVLocalTunnelOptions
 
 - (id)init
 {
@@ -1408,9 +1408,9 @@ static NSString *urlEncode(id object) {
     return self;
 }
 
-+ (CDVInAppBrowserOptions*)parseOptions:(NSString*)options
++ (CDVLocalTunnelOptions*)parseOptions:(NSString*)options
 {
-    CDVInAppBrowserOptions* obj = [[CDVInAppBrowserOptions alloc] init];
+    CDVLocalTunnelOptions* obj = [[CDVLocalTunnelOptions alloc] init];
 
     // NOTE: this parsing does not handle quotes within values
     NSArray* pairs = [options componentsSeparatedByString:@","];
@@ -1447,7 +1447,7 @@ static NSString *urlEncode(id object) {
 
 @end
 
-@implementation CDVInAppBrowserNavigationController : UINavigationController
+@implementation CDVLocalTunnelNavigationController : UINavigationController
 
 - (void) dismissViewControllerAnimated:(BOOL)flag completion:(void (^)(void))completion {
     if ( self.presentedViewController) {
