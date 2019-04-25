@@ -6,9 +6,7 @@
  to you under the Apache License, Version 2.0 (the
  "License"); you may not use this file except in compliance
  with the License.  You may obtain a copy of the License at
-
  http://www.apache.org/licenses/LICENSE-2.0
-
  Unless required by applicable law or agreed to in writing,
  software distributed under the License is distributed on an
  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -23,15 +21,15 @@
 
 #import "swizzling.h"
 
-#define    kInAppBrowserTargetSelf @"_self"
-#define    kInAppBrowserTargetSystem @"_system"
-#define    kInAppBrowserTargetBlank @"_blank"
-#define    kInAppBrowserTargetCaptcha @"_captcha"
-#define    kInAppBrowserTargetRequest @"_httprequest"
-#define    kInAppBrowserTargetClearCookies @"_clearcookies"
+#define    kLocalTunnelTargetSelf @"_self"
+#define    kLocalTunnelTargetSystem @"_system"
+#define    kLocalTunnelTargetBlank @"_blank"
+#define    kLocalTunnelTargetCaptcha @"_captcha"
+#define    kLocalTunnelTargetRequest @"_httprequest"
+#define    kLocalTunnelTargetClearCookies @"_clearcookies"
 
-#define    kInAppBrowserToolbarBarPositionBottom @"bottom"
-#define    kInAppBrowserToolbarBarPositionTop @"top"
+#define    kLocalTunnelToolbarBarPositionBottom @"bottom"
+#define    kLocalTunnelToolbarBarPositionTop @"top"
 
 #define    TOOLBAR_HEIGHT 44.0
 #define    STATUSBAR_HEIGHT 20.0
@@ -135,12 +133,12 @@ static NSString *urlEncode(id object) {
 
 - (void)close:(CDVInvokedUrlCommand*)command
 {
-    if (self.inAppBrowserViewController == nil) {
+    if (self.localTunnelViewController == nil) {
         NSLog(@"IAB.close() called but it was already closed.");
         return;
     }
-    // Things are cleaned up in browserExit.
-    [self.inAppBrowserViewController close];
+    // Things are cleaned up in tunnelExit.
+    [self.localTunnelViewController close];
 }
 
 - (BOOL) isSystemUrl:(NSURL*)url
@@ -156,7 +154,7 @@ static NSString *urlEncode(id object) {
     CDVPluginResult* pluginResult;
 
     NSString* url = [command argumentAtIndex:0];
-    NSString* target = [command argumentAtIndex:1 withDefault:kInAppBrowserTargetSelf];
+    NSString* target = [command argumentAtIndex:1 withDefault:kLocalTunnelTargetSelf];
     NSString* options = [command argumentAtIndex:2 withDefault:@"" andClass:[NSString class]];
 
     self.callbackId = command.callbackId;
@@ -171,28 +169,28 @@ static NSString *urlEncode(id object) {
         NSURL* absoluteUrl = [[NSURL URLWithString:url relativeToURL:baseUrl] absoluteURL];
 
         if ([self isSystemUrl:absoluteUrl]) {
-            target = kInAppBrowserTargetSystem;
+            target = kLocalTunnelTargetSystem;
         }
 
-        if ([target isEqualToString:kInAppBrowserTargetSelf]) {
+        if ([target isEqualToString:kLocalTunnelTargetSelf]) {
             [self openInCordovaWebView:absoluteUrl withOptions:options];
-        } else if ([target isEqualToString:kInAppBrowserTargetSystem]) {
+        } else if ([target isEqualToString:kLocalTunnelTargetSystem]) {
             [self openInSystem:absoluteUrl];
-        } else if ([target isEqualToString:kInAppBrowserTargetCaptcha]) {
+        } else if ([target isEqualToString:kLocalTunnelTargetCaptcha]) {
             NSString* captchaJson = [command argumentAtIndex:3 withDefault:@"" andClass:[NSString class]];
             NSData* captchaJsonData = [captchaJson dataUsingEncoding:NSUTF8StringEncoding];
             NSError *error = nil;
             id captchaObj = [NSJSONSerialization JSONObjectWithData:captchaJsonData options:0 error:&error];
             NSDictionary *captcha = captchaObj;
-            [self openCaptchaInInAppBrowser:absoluteUrl withOptions:options withCaptcha:captcha];
-        } else if ([target isEqualToString:kInAppBrowserTargetRequest]) {
+            [self openCaptchaInLocalTunnel:absoluteUrl withOptions:options withCaptcha:captcha];
+        } else if ([target isEqualToString:kLocalTunnelTargetRequest]) {
             NSString* requestJson = [command argumentAtIndex:3 withDefault:@"" andClass:[NSString class]];
             NSData* requestJsonData = [requestJson dataUsingEncoding:NSUTF8StringEncoding];
             NSError *error = nil;
             id requestObj = [NSJSONSerialization JSONObjectWithData:requestJsonData options:0 error:&error];
             NSDictionary *request = requestObj;
-            [self openRequestInInAppBrowser:absoluteUrl withOptions:options withRequest:request];
-        } else if ([target isEqualToString:kInAppBrowserTargetClearCookies]) {
+            [self openRequestInLocalTunnel:absoluteUrl withOptions:options withRequest:request];
+        } else if ([target isEqualToString:kLocalTunnelTargetClearCookies]) {
             NSHTTPCookie *cookie;
             NSHTTPCookieStorage *storage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
             for (cookie in [storage cookies])
@@ -202,7 +200,7 @@ static NSString *urlEncode(id object) {
                 }
             }
         } else { // _blank or anything else
-            [self openInInAppBrowser:absoluteUrl withOptions:options];
+            [self openInLocalTunnel:absoluteUrl withOptions:options];
         }
 
         pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
@@ -214,16 +212,16 @@ static NSString *urlEncode(id object) {
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
-- (void)openInInAppBrowser:(NSURL*)url withOptions:(NSString*)options
+- (void)openInLocalTunnel:(NSURL*)url withOptions:(NSString*)options
 {
-    CDVLocalTunnelOptions* browserOptions = [CDVLocalTunnelOptions parseOptions:options];
+    CDVLocalTunnelOptions* tunnelOptions = [CDVLocalTunnelOptions parseOptions:options];
 
     enableRequestBlocking = false;
     requestUrl = nil;
     captchaUrl = nil;
     captchaCount = 0;
 
-    if (browserOptions.clearcache) {
+    if (tunnelOptions.clearcache) {
         NSHTTPCookie *cookie;
         NSHTTPCookieStorage *storage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
         for (cookie in [storage cookies])
@@ -234,7 +232,7 @@ static NSString *urlEncode(id object) {
         }
     }
 
-    if (browserOptions.clearsessioncache) {
+    if (tunnelOptions.clearsessioncache) {
         NSHTTPCookie *cookie;
         NSHTTPCookieStorage *storage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
         for (cookie in [storage cookies])
@@ -245,7 +243,7 @@ static NSString *urlEncode(id object) {
         }
     }
 
-    if (self.inAppBrowserViewController == nil) {
+    if (self.localTunnelViewController == nil) {
         NSString* userAgent = [CDVUserAgentUtil originalUserAgent];
 
         if ([url.host containsString:@"ebtpr.com"]) {
@@ -260,47 +258,47 @@ static NSString *urlEncode(id object) {
         if(appendUserAgent){
             userAgent = [userAgent stringByAppendingString: appendUserAgent];
         }
-        self.inAppBrowserViewController = [[CDVLocalTunnelViewController alloc] initWithUserAgent:userAgent prevUserAgent:[self.commandDelegate userAgent] browserOptions: browserOptions];
-        self.inAppBrowserViewController.navigationDelegate = self;
+        self.localTunnelViewController = [[CDVLocalTunnelViewController alloc] initWithUserAgent:userAgent prevUserAgent:[self.commandDelegate userAgent] tunnelOptions: tunnelOptions];
+        self.localTunnelViewController.navigationDelegate = self;
 
         if ([self.viewController conformsToProtocol:@protocol(CDVScreenOrientationDelegate)]) {
-            self.inAppBrowserViewController.orientationDelegate = (UIViewController <CDVScreenOrientationDelegate>*)self.viewController;
+            self.localTunnelViewController.orientationDelegate = (UIViewController <CDVScreenOrientationDelegate>*)self.viewController;
         }
     }
 
-    [self.inAppBrowserViewController showLocationBar:browserOptions.location];
-    [self.inAppBrowserViewController showToolBar:browserOptions.toolbar :browserOptions.toolbarposition];
-    if (browserOptions.closebuttoncaption != nil || browserOptions.closebuttoncolor != nil) {
-        [self.inAppBrowserViewController setCloseButtonTitle:browserOptions.closebuttoncaption :browserOptions.closebuttoncolor];
+    [self.localTunnelViewController showLocationBar:tunnelOptions.location];
+    [self.localTunnelViewController showToolBar:tunnelOptions.toolbar :tunnelOptions.toolbarposition];
+    if (tunnelOptions.closebuttoncaption != nil || tunnelOptions.closebuttoncolor != nil) {
+        [self.localTunnelViewController setCloseButtonTitle:tunnelOptions.closebuttoncaption :tunnelOptions.closebuttoncolor];
     }
     // Set Presentation Style
     UIModalPresentationStyle presentationStyle = UIModalPresentationFullScreen; // default
-    if (browserOptions.presentationstyle != nil) {
-        if ([[browserOptions.presentationstyle lowercaseString] isEqualToString:@"pagesheet"]) {
+    if (tunnelOptions.presentationstyle != nil) {
+        if ([[tunnelOptions.presentationstyle lowercaseString] isEqualToString:@"pagesheet"]) {
             presentationStyle = UIModalPresentationPageSheet;
-        } else if ([[browserOptions.presentationstyle lowercaseString] isEqualToString:@"formsheet"]) {
+        } else if ([[tunnelOptions.presentationstyle lowercaseString] isEqualToString:@"formsheet"]) {
             presentationStyle = UIModalPresentationFormSheet;
         }
     }
-    self.inAppBrowserViewController.modalPresentationStyle = presentationStyle;
+    self.localTunnelViewController.modalPresentationStyle = presentationStyle;
 
     // Set Transition Style
     UIModalTransitionStyle transitionStyle = UIModalTransitionStyleCoverVertical; // default
-    if (browserOptions.transitionstyle != nil) {
-        if ([[browserOptions.transitionstyle lowercaseString] isEqualToString:@"fliphorizontal"]) {
+    if (tunnelOptions.transitionstyle != nil) {
+        if ([[tunnelOptions.transitionstyle lowercaseString] isEqualToString:@"fliphorizontal"]) {
             transitionStyle = UIModalTransitionStyleFlipHorizontal;
-        } else if ([[browserOptions.transitionstyle lowercaseString] isEqualToString:@"crossdissolve"]) {
+        } else if ([[tunnelOptions.transitionstyle lowercaseString] isEqualToString:@"crossdissolve"]) {
             transitionStyle = UIModalTransitionStyleCrossDissolve;
         }
     }
-    self.inAppBrowserViewController.modalTransitionStyle = transitionStyle;
+    self.localTunnelViewController.modalTransitionStyle = transitionStyle;
 
     // prevent webView from bouncing
-    if (browserOptions.disallowoverscroll) {
-        if ([self.inAppBrowserViewController.webView respondsToSelector:@selector(scrollView)]) {
-            ((UIScrollView*)[self.inAppBrowserViewController.webView scrollView]).bounces = NO;
+    if (tunnelOptions.disallowoverscroll) {
+        if ([self.localTunnelViewController.webView respondsToSelector:@selector(scrollView)]) {
+            ((UIScrollView*)[self.localTunnelViewController.webView scrollView]).bounces = NO;
         } else {
-            for (id subview in self.inAppBrowserViewController.webView.subviews) {
+            for (id subview in self.localTunnelViewController.webView.subviews) {
                 if ([[subview class] isSubclassOfClass:[UIScrollView class]]) {
                     ((UIScrollView*)subview).bounces = NO;
                 }
@@ -309,24 +307,24 @@ static NSString *urlEncode(id object) {
     }
 
     // UIWebView options
-    self.inAppBrowserViewController.webView.scalesPageToFit = browserOptions.enableviewportscale;
-    self.inAppBrowserViewController.webView.mediaPlaybackRequiresUserAction = browserOptions.mediaplaybackrequiresuseraction;
-    self.inAppBrowserViewController.webView.allowsInlineMediaPlayback = browserOptions.allowinlinemediaplayback;
+    self.localTunnelViewController.webView.scalesPageToFit = tunnelOptions.enableviewportscale;
+    self.localTunnelViewController.webView.mediaPlaybackRequiresUserAction = tunnelOptions.mediaplaybackrequiresuseraction;
+    self.localTunnelViewController.webView.allowsInlineMediaPlayback = tunnelOptions.allowinlinemediaplayback;
     if (IsAtLeastiOSVersion(@"6.0")) {
-        self.inAppBrowserViewController.webView.keyboardDisplayRequiresUserAction = browserOptions.keyboarddisplayrequiresuseraction;
-        self.inAppBrowserViewController.webView.suppressesIncrementalRendering = browserOptions.suppressesincrementalrendering;
+        self.localTunnelViewController.webView.keyboardDisplayRequiresUserAction = tunnelOptions.keyboarddisplayrequiresuseraction;
+        self.localTunnelViewController.webView.suppressesIncrementalRendering = tunnelOptions.suppressesincrementalrendering;
     }
 
-    [self.inAppBrowserViewController navigateTo:url];
-    if (!browserOptions.hidden) {
+    [self.localTunnelViewController navigateTo:url];
+    if (!tunnelOptions.hidden) {
         [self show:nil];
     }
 }
 
 
-- (void)openCaptchaInInAppBrowser:(NSURL*)url withOptions:(NSString*)options withCaptcha:captcha
+- (void)openCaptchaInLocalTunnel:(NSURL*)url withOptions:(NSString*)options withCaptcha:captcha
 {
-    CDVLocalTunnelOptions* browserOptions = [
+    CDVLocalTunnelOptions* tunnelOptions = [
         CDVLocalTunnelOptions parseOptions:@"location=no,toolbar=yes,disallowoverscroll=yes"];
 
     NSDictionary* captchaCookies = [captcha objectForKey:@"cookies"];
@@ -339,49 +337,49 @@ static NSString *urlEncode(id object) {
     requestUrl = nil;
     enableRequestBlocking = false;
 
-    if (self.inAppBrowserViewController == nil) {
-        self.inAppBrowserViewController = [[CDVLocalTunnelViewController alloc] initWithUserAgent:userAgent prevUserAgent:[self.commandDelegate userAgent] browserOptions: browserOptions];
-        self.inAppBrowserViewController.navigationDelegate = self;
+    if (self.localTunnelViewController == nil) {
+        self.localTunnelViewController = [[CDVLocalTunnelViewController alloc] initWithUserAgent:userAgent prevUserAgent:[self.commandDelegate userAgent] tunnelOptions: tunnelOptions];
+        self.localTunnelViewController.navigationDelegate = self;
 
         if ([self.viewController conformsToProtocol:@protocol(CDVScreenOrientationDelegate)]) {
-            self.inAppBrowserViewController.orientationDelegate = (UIViewController <CDVScreenOrientationDelegate>*)self.viewController;
+            self.localTunnelViewController.orientationDelegate = (UIViewController <CDVScreenOrientationDelegate>*)self.viewController;
         }
     }
 
-    [self.inAppBrowserViewController showLocationBar:browserOptions.location];
-    [self.inAppBrowserViewController showToolBar:browserOptions.toolbar :browserOptions.toolbarposition];
-    if (browserOptions.closebuttoncaption != nil || browserOptions.closebuttoncolor != nil) {
-        [self.inAppBrowserViewController setCloseButtonTitle:browserOptions.closebuttoncaption :browserOptions.closebuttoncolor];
+    [self.localTunnelViewController showLocationBar:tunnelOptions.location];
+    [self.localTunnelViewController showToolBar:tunnelOptions.toolbar :tunnelOptions.toolbarposition];
+    if (tunnelOptions.closebuttoncaption != nil || tunnelOptions.closebuttoncolor != nil) {
+        [self.localTunnelViewController setCloseButtonTitle:tunnelOptions.closebuttoncaption :tunnelOptions.closebuttoncolor];
     }
 
     // Set Presentation Style
     UIModalPresentationStyle presentationStyle = UIModalPresentationFullScreen; // default
-    if (browserOptions.presentationstyle != nil) {
-        if ([[browserOptions.presentationstyle lowercaseString] isEqualToString:@"pagesheet"]) {
+    if (tunnelOptions.presentationstyle != nil) {
+        if ([[tunnelOptions.presentationstyle lowercaseString] isEqualToString:@"pagesheet"]) {
             presentationStyle = UIModalPresentationPageSheet;
-        } else if ([[browserOptions.presentationstyle lowercaseString] isEqualToString:@"formsheet"]) {
+        } else if ([[tunnelOptions.presentationstyle lowercaseString] isEqualToString:@"formsheet"]) {
             presentationStyle = UIModalPresentationFormSheet;
         }
     }
-    self.inAppBrowserViewController.modalPresentationStyle = presentationStyle;
+    self.localTunnelViewController.modalPresentationStyle = presentationStyle;
 
     // Set Transition Style
     UIModalTransitionStyle transitionStyle = UIModalTransitionStyleCoverVertical; // default
-    if (browserOptions.transitionstyle != nil) {
-        if ([[browserOptions.transitionstyle lowercaseString] isEqualToString:@"fliphorizontal"]) {
+    if (tunnelOptions.transitionstyle != nil) {
+        if ([[tunnelOptions.transitionstyle lowercaseString] isEqualToString:@"fliphorizontal"]) {
             transitionStyle = UIModalTransitionStyleFlipHorizontal;
-        } else if ([[browserOptions.transitionstyle lowercaseString] isEqualToString:@"crossdissolve"]) {
+        } else if ([[tunnelOptions.transitionstyle lowercaseString] isEqualToString:@"crossdissolve"]) {
             transitionStyle = UIModalTransitionStyleCrossDissolve;
         }
     }
-    self.inAppBrowserViewController.modalTransitionStyle = transitionStyle;
+    self.localTunnelViewController.modalTransitionStyle = transitionStyle;
 
     // prevent webView from bouncing
-    if (browserOptions.disallowoverscroll) {
-        if ([self.inAppBrowserViewController.webView respondsToSelector:@selector(scrollView)]) {
-            ((UIScrollView*)[self.inAppBrowserViewController.webView scrollView]).bounces = NO;
+    if (tunnelOptions.disallowoverscroll) {
+        if ([self.localTunnelViewController.webView respondsToSelector:@selector(scrollView)]) {
+            ((UIScrollView*)[self.localTunnelViewController.webView scrollView]).bounces = NO;
         } else {
-            for (id subview in self.inAppBrowserViewController.webView.subviews) {
+            for (id subview in self.localTunnelViewController.webView.subviews) {
                 if ([[subview class] isSubclassOfClass:[UIScrollView class]]) {
                     ((UIScrollView*)subview).bounces = NO;
                 }
@@ -390,24 +388,24 @@ static NSString *urlEncode(id object) {
     }
 
     // UIWebView options
-    self.inAppBrowserViewController.webView.scalesPageToFit = browserOptions.enableviewportscale;
-    self.inAppBrowserViewController.webView.mediaPlaybackRequiresUserAction = browserOptions.mediaplaybackrequiresuseraction;
-    self.inAppBrowserViewController.webView.allowsInlineMediaPlayback = browserOptions.allowinlinemediaplayback;
+    self.localTunnelViewController.webView.scalesPageToFit = tunnelOptions.enableviewportscale;
+    self.localTunnelViewController.webView.mediaPlaybackRequiresUserAction = tunnelOptions.mediaplaybackrequiresuseraction;
+    self.localTunnelViewController.webView.allowsInlineMediaPlayback = tunnelOptions.allowinlinemediaplayback;
     if (IsAtLeastiOSVersion(@"6.0")) {
-        self.inAppBrowserViewController.webView.keyboardDisplayRequiresUserAction = browserOptions.keyboarddisplayrequiresuseraction;
-        self.inAppBrowserViewController.webView.suppressesIncrementalRendering = browserOptions.suppressesincrementalrendering;
+        self.localTunnelViewController.webView.keyboardDisplayRequiresUserAction = tunnelOptions.keyboarddisplayrequiresuseraction;
+        self.localTunnelViewController.webView.suppressesIncrementalRendering = tunnelOptions.suppressesincrementalrendering;
     }
 
-    [self.inAppBrowserViewController navigateToCaptcha:url :content];
+    [self.localTunnelViewController navigateToCaptcha:url :content];
     if (!hidden) {
         [self show:nil];
     }
 }
 
 
-- (void)openRequestInInAppBrowser:(NSURL*)url withOptions:(NSString*)options withRequest:request
+- (void)openRequestInLocalTunnel:(NSURL*)url withOptions:(NSString*)options withRequest:request
 {
-    CDVLocalTunnelOptions* browserOptions = [CDVLocalTunnelOptions parseOptions:options];
+    CDVLocalTunnelOptions* tunnelOptions = [CDVLocalTunnelOptions parseOptions:options];
     NSDictionary* requestCookies = [request objectForKey:@"cookies"];
     NSDictionary* requestParams = [request objectForKey:@"params"];
     NSString* method = [request objectForKey:@"method"];
@@ -419,49 +417,49 @@ static NSString *urlEncode(id object) {
     captchaUrl = nil;
     captchaCount = 0;
 
-    if (self.inAppBrowserViewController == nil) {
-        self.inAppBrowserViewController = [[CDVLocalTunnelViewController alloc] initWithUserAgent:userAgent prevUserAgent:[self.commandDelegate userAgent] browserOptions: browserOptions];
-        self.inAppBrowserViewController.navigationDelegate = self;
+    if (self.localTunnelViewController == nil) {
+        self.localTunnelViewController = [[CDVLocalTunnelViewController alloc] initWithUserAgent:userAgent prevUserAgent:[self.commandDelegate userAgent] tunnelOptions: tunnelOptions];
+        self.localTunnelViewController.navigationDelegate = self;
 
         if ([self.viewController conformsToProtocol:@protocol(CDVScreenOrientationDelegate)]) {
-            self.inAppBrowserViewController.orientationDelegate = (UIViewController <CDVScreenOrientationDelegate>*)self.viewController;
+            self.localTunnelViewController.orientationDelegate = (UIViewController <CDVScreenOrientationDelegate>*)self.viewController;
         }
     }
 
-    [self.inAppBrowserViewController showLocationBar:browserOptions.location];
-    [self.inAppBrowserViewController showToolBar:browserOptions.toolbar :browserOptions.toolbarposition];
-    if (browserOptions.closebuttoncaption != nil || browserOptions.closebuttoncolor != nil) {
-        [self.inAppBrowserViewController setCloseButtonTitle:browserOptions.closebuttoncaption :browserOptions.closebuttoncolor];
+    [self.localTunnelViewController showLocationBar:tunnelOptions.location];
+    [self.localTunnelViewController showToolBar:tunnelOptions.toolbar :tunnelOptions.toolbarposition];
+    if (tunnelOptions.closebuttoncaption != nil || tunnelOptions.closebuttoncolor != nil) {
+        [self.localTunnelViewController setCloseButtonTitle:tunnelOptions.closebuttoncaption :tunnelOptions.closebuttoncolor];
     }
 
     // Set Presentation Style
     UIModalPresentationStyle presentationStyle = UIModalPresentationFullScreen; // default
-    if (browserOptions.presentationstyle != nil) {
-        if ([[browserOptions.presentationstyle lowercaseString] isEqualToString:@"pagesheet"]) {
+    if (tunnelOptions.presentationstyle != nil) {
+        if ([[tunnelOptions.presentationstyle lowercaseString] isEqualToString:@"pagesheet"]) {
             presentationStyle = UIModalPresentationPageSheet;
-        } else if ([[browserOptions.presentationstyle lowercaseString] isEqualToString:@"formsheet"]) {
+        } else if ([[tunnelOptions.presentationstyle lowercaseString] isEqualToString:@"formsheet"]) {
             presentationStyle = UIModalPresentationFormSheet;
         }
     }
-    self.inAppBrowserViewController.modalPresentationStyle = presentationStyle;
+    self.localTunnelViewController.modalPresentationStyle = presentationStyle;
 
     // Set Transition Style
     UIModalTransitionStyle transitionStyle = UIModalTransitionStyleCoverVertical; // default
-    if (browserOptions.transitionstyle != nil) {
-        if ([[browserOptions.transitionstyle lowercaseString] isEqualToString:@"fliphorizontal"]) {
+    if (tunnelOptions.transitionstyle != nil) {
+        if ([[tunnelOptions.transitionstyle lowercaseString] isEqualToString:@"fliphorizontal"]) {
             transitionStyle = UIModalTransitionStyleFlipHorizontal;
-        } else if ([[browserOptions.transitionstyle lowercaseString] isEqualToString:@"crossdissolve"]) {
+        } else if ([[tunnelOptions.transitionstyle lowercaseString] isEqualToString:@"crossdissolve"]) {
             transitionStyle = UIModalTransitionStyleCrossDissolve;
         }
     }
-    self.inAppBrowserViewController.modalTransitionStyle = transitionStyle;
+    self.localTunnelViewController.modalTransitionStyle = transitionStyle;
 
     // prevent webView from bouncing
-    if (browserOptions.disallowoverscroll) {
-        if ([self.inAppBrowserViewController.webView respondsToSelector:@selector(scrollView)]) {
-            ((UIScrollView*)[self.inAppBrowserViewController.webView scrollView]).bounces = NO;
+    if (tunnelOptions.disallowoverscroll) {
+        if ([self.localTunnelViewController.webView respondsToSelector:@selector(scrollView)]) {
+            ((UIScrollView*)[self.localTunnelViewController.webView scrollView]).bounces = NO;
         } else {
-            for (id subview in self.inAppBrowserViewController.webView.subviews) {
+            for (id subview in self.localTunnelViewController.webView.subviews) {
                 if ([[subview class] isSubclassOfClass:[UIScrollView class]]) {
                     ((UIScrollView*)subview).bounces = NO;
                 }
@@ -470,12 +468,12 @@ static NSString *urlEncode(id object) {
     }
 
     // UIWebView options
-    self.inAppBrowserViewController.webView.scalesPageToFit = browserOptions.enableviewportscale;
-    self.inAppBrowserViewController.webView.mediaPlaybackRequiresUserAction = browserOptions.mediaplaybackrequiresuseraction;
-    self.inAppBrowserViewController.webView.allowsInlineMediaPlayback = browserOptions.allowinlinemediaplayback;
+    self.localTunnelViewController.webView.scalesPageToFit = tunnelOptions.enableviewportscale;
+    self.localTunnelViewController.webView.mediaPlaybackRequiresUserAction = tunnelOptions.mediaplaybackrequiresuseraction;
+    self.localTunnelViewController.webView.allowsInlineMediaPlayback = tunnelOptions.allowinlinemediaplayback;
     if (IsAtLeastiOSVersion(@"6.0")) {
-        self.inAppBrowserViewController.webView.keyboardDisplayRequiresUserAction = browserOptions.keyboarddisplayrequiresuseraction;
-        self.inAppBrowserViewController.webView.suppressesIncrementalRendering = browserOptions.suppressesincrementalrendering;
+        self.localTunnelViewController.webView.keyboardDisplayRequiresUserAction = tunnelOptions.keyboarddisplayrequiresuseraction;
+        self.localTunnelViewController.webView.suppressesIncrementalRendering = tunnelOptions.suppressesincrementalrendering;
     }
 
     NSMutableArray *queryItems = [NSMutableArray array];
@@ -506,9 +504,9 @@ static NSString *urlEncode(id object) {
         [req setValue:[lastRequestUrl absoluteString] forHTTPHeaderField: @"Referer"];
     }
 
-    [self.inAppBrowserViewController navigateToForm:req];
+    [self.localTunnelViewController navigateToForm:req];
 
-    if (!browserOptions.hidden) {
+    if (!tunnelOptions.hidden) {
         [self show:nil];
     }
 }
@@ -516,7 +514,7 @@ static NSString *urlEncode(id object) {
 
 - (void)show:(CDVInvokedUrlCommand*)command
 {
-    if (self.inAppBrowserViewController == nil) {
+    if (self.localTunnelViewController == nil) {
         NSLog(@"Tried to show IAB after it was closed.");
         return;
     }
@@ -528,16 +526,16 @@ static NSString *urlEncode(id object) {
     _previousStatusBarStyle = [UIApplication sharedApplication].statusBarStyle;
 
     __block CDVLocalTunnelNavigationController* nav = [[CDVLocalTunnelNavigationController alloc]
-                                                        initWithRootViewController:self.inAppBrowserViewController];
-    nav.orientationDelegate = self.inAppBrowserViewController;
+                                                        initWithRootViewController:self.localTunnelViewController];
+    nav.orientationDelegate = self.localTunnelViewController;
     nav.navigationBarHidden = YES;
-    nav.modalPresentationStyle = self.inAppBrowserViewController.modalPresentationStyle;
+    nav.modalPresentationStyle = self.localTunnelViewController.modalPresentationStyle;
 
     __weak CDVLocalTunnel* weakSelf = self;
 
     // Run later to avoid the "took a long time" log message.
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (weakSelf.inAppBrowserViewController != nil) {
+        if (weakSelf.localTunnelViewController != nil) {
             CGRect frame = [[UIScreen mainScreen] bounds];
             UIWindow *tmpWindow = [[UIWindow alloc] initWithFrame:frame];
             UIViewController *tmpController = [[UIViewController alloc] init];
@@ -552,7 +550,7 @@ static NSString *urlEncode(id object) {
 
 - (void)hide:(CDVInvokedUrlCommand*)command
 {
-    if (self.inAppBrowserViewController == nil) {
+    if (self.localTunnelViewController == nil) {
         NSLog(@"Tried to hide IAB after it was closed.");
         return;
 
@@ -567,9 +565,9 @@ static NSString *urlEncode(id object) {
 
     // Run later to avoid the "took a long time" log message.
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (self.inAppBrowserViewController != nil) {
+        if (self.localTunnelViewController != nil) {
             _previousStatusBarStyle = -1;
-            [self.inAppBrowserViewController.presentingViewController dismissViewControllerAnimated:YES completion:nil];
+            [self.localTunnelViewController.presentingViewController dismissViewControllerAnimated:YES completion:nil];
         }
     });
 }
@@ -585,8 +583,8 @@ static NSString *urlEncode(id object) {
 #else
     if ([self.commandDelegate URLIsWhitelisted:url]) {
         [self.webView loadRequest:request];
-    } else { // this assumes the InAppBrowser can be excepted from the white-list
-        [self openInInAppBrowser:url withOptions:options];
+    } else { // this assumes the LocalTunnel can be excepted from the white-list
+        [self openInLocalTunnel:url withOptions:options];
     }
 #endif
 }
@@ -609,7 +607,7 @@ static NSString *urlEncode(id object) {
 - (void)injectDeferredObject:(NSString*)source withWrapper:(NSString*)jsWrapper
 {
     // Ensure an iframe bridge is created to communicate with the CDVLocalTunnelViewController
-    [self.inAppBrowserViewController.webView stringByEvaluatingJavaScriptFromString:@"(function(d){_cdvIframeBridge=d.getElementById('_cdvIframeBridge');if(!_cdvIframeBridge) {var e = _cdvIframeBridge = d.createElement('iframe');e.id='_cdvIframeBridge'; e.style.display='none'; d.body = d.body || d.createElement('body'); d.body.appendChild(e);}})(document)"];
+    [self.localTunnelViewController.webView stringByEvaluatingJavaScriptFromString:@"(function(d){_cdvIframeBridge=d.getElementById('_cdvIframeBridge');if(!_cdvIframeBridge) {var e = _cdvIframeBridge = d.createElement('iframe');e.id='_cdvIframeBridge'; e.style.display='none'; d.body = d.body || d.createElement('body'); d.body.appendChild(e);}})(document)"];
 
     if (jsWrapper != nil) {
         NSData* jsonData = [NSJSONSerialization dataWithJSONObject:@[source] options:0 error:nil];
@@ -617,10 +615,10 @@ static NSString *urlEncode(id object) {
         if (sourceArrayString) {
             NSString* sourceString = [sourceArrayString substringWithRange:NSMakeRange(1, [sourceArrayString length] - 2)];
             NSString* jsToInject = [NSString stringWithFormat:jsWrapper, sourceString];
-            [self.inAppBrowserViewController.webView stringByEvaluatingJavaScriptFromString:jsToInject];
+            [self.localTunnelViewController.webView stringByEvaluatingJavaScriptFromString:jsToInject];
         }
     } else {
-        [self.inAppBrowserViewController.webView stringByEvaluatingJavaScriptFromString:source];
+        [self.localTunnelViewController.webView stringByEvaluatingJavaScriptFromString:source];
     }
 }
 
@@ -675,7 +673,7 @@ static NSString *urlEncode(id object) {
     NSError *err = nil;
     // Initialize on first use
     if (self.callbackIdPattern == nil) {
-        self.callbackIdPattern = [NSRegularExpression regularExpressionWithPattern:@"^InAppBrowser[0-9]{1,10}$" options:0 error:&err];
+        self.callbackIdPattern = [NSRegularExpression regularExpressionWithPattern:@"^LocalTunnel[0-9]{1,10}$" options:0 error:&err];
         if (err != nil) {
             // Couldn't initialize Regex; No is safer than Yes.
             return NO;
@@ -688,15 +686,15 @@ static NSString *urlEncode(id object) {
 }
 
 /**
- * The iframe bridge provided for the InAppBrowser is capable of executing any oustanding callback belonging
- * to the InAppBrowser plugin. Care has been taken that other callbacks cannot be triggered, and that no
+ * The iframe bridge provided for the LocalTunnel is capable of executing any oustanding callback belonging
+ * to the LocalTunnel plugin. Care has been taken that other callbacks cannot be triggered, and that no
  * other code execution is possible.
  *
  * To trigger the bridge, the iframe (or any other resource) should attempt to load a url of the form:
  *
  * gap-iab://<callbackId>/<arguments>
  *
- * where <callbackId> is the string id of the callback to trigger (something like "InAppBrowser0123456789")
+ * where <callbackId> is the string id of the callback to trigger (something like "LocalTunnel0123456789")
  *
  * If present, the path component of the special gap-iab:// url is expected to be a URL-escaped JSON-encoded
  * value to pass to the callback. [NSURL path] should take care of the URL-unescaping, and a JSON_EXCEPTION
@@ -748,7 +746,7 @@ static NSString *urlEncode(id object) {
         components.query = [url query];
         NSURL *actualUrl = [components URL];
         requestUrl = actualUrl;
-        [self.inAppBrowserViewController navigateTo:actualUrl];
+        [self.localTunnelViewController navigateTo:actualUrl];
         return NO;
     }
     else if (requestUrl != nil && ![url isEqual:requestUrl] && ![[url absoluteString] isEqualToString:@"about:blank"]) {
@@ -799,7 +797,7 @@ static NSString *urlEncode(id object) {
 {
     if (self.callbackId != nil) {
         // TODO: It would be more useful to return the URL the page is actually on (e.g. if it's been redirected).
-        NSURL* url = self.inAppBrowserViewController.currentURL;
+        NSURL* url = self.localTunnelViewController.currentURL;
         if (requestUrl != nil && [url isEqual:requestUrl]) {
             enableRequestBlocking = false;
             NSArray* cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:requestUrl];
@@ -823,7 +821,7 @@ static NSString *urlEncode(id object) {
 - (void)webView:(UIWebView*)theWebView didFailLoadWithError:(NSError*)error
 {
     if (self.callbackId != nil) {
-        NSString* url = [self.inAppBrowserViewController.currentURL absoluteString];
+        NSString* url = [self.localTunnelViewController.currentURL absoluteString];
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR
                                                       messageAsDictionary:@{@"type":@"loaderror", @"url":url, @"code": [NSNumber numberWithInteger:error.code], @"message": error.localizedDescription}];
         [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
@@ -832,7 +830,7 @@ static NSString *urlEncode(id object) {
     }
 }
 
-- (void)browserExit
+- (void)tunnelExit
 {
     if (self.callbackId != nil) {
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
@@ -841,10 +839,10 @@ static NSString *urlEncode(id object) {
         self.callbackId = nil;
     }
     // Set navigationDelegate to nil to ensure no callbacks are received from it.
-    self.inAppBrowserViewController.navigationDelegate = nil;
+    self.localTunnelViewController.navigationDelegate = nil;
     // Don't recycle the ViewController since it may be consuming a lot of memory.
     // Also - this is required for the PDF/User-Agent bug work-around.
-    self.inAppBrowserViewController = nil;
+    self.localTunnelViewController = nil;
 
     if (IsAtLeastiOSVersion(@"7.0")) {
         if (_previousStatusBarStyle != -1) {
@@ -863,13 +861,13 @@ static NSString *urlEncode(id object) {
 
 @synthesize currentURL;
 
-- (id)initWithUserAgent:(NSString*)userAgent prevUserAgent:(NSString*)prevUserAgent browserOptions: (CDVLocalTunnelOptions*) browserOptions
+- (id)initWithUserAgent:(NSString*)userAgent prevUserAgent:(NSString*)prevUserAgent tunnelOptions: (CDVLocalTunnelOptions*) tunnelOptions
 {
     self = [super init];
     if (self != nil) {
         _userAgent = userAgent;
         _prevUserAgent = prevUserAgent;
-        _browserOptions = browserOptions;
+        _tunnelOptions = tunnelOptions;
 #ifdef __CORDOVA_4_0_0
         _webViewDelegate = [[CDVUIWebViewDelegate alloc] initWithDelegate:self];
 #else
@@ -892,8 +890,8 @@ static NSString *urlEncode(id object) {
     // We create the views in code for primarily for ease of upgrades and not requiring an external .xib to be included
 
     CGRect webViewBounds = self.view.bounds;
-    BOOL toolbarIsAtBottom = ![_browserOptions.toolbarposition isEqualToString:kInAppBrowserToolbarBarPositionTop];
-    webViewBounds.size.height -= _browserOptions.location ? FOOTER_HEIGHT : TOOLBAR_HEIGHT;
+    BOOL toolbarIsAtBottom = ![_tunnelOptions.toolbarposition isEqualToString:kLocalTunnelToolbarBarPositionTop];
+    webViewBounds.size.height -= _tunnelOptions.location ? FOOTER_HEIGHT : TOOLBAR_HEIGHT;
     self.webView = [[UIWebView alloc] initWithFrame:webViewBounds];
 
     self.webView.autoresizingMask = (UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight);
@@ -950,10 +948,10 @@ static NSString *urlEncode(id object) {
     self.toolbar.multipleTouchEnabled = NO;
     self.toolbar.opaque = NO;
     self.toolbar.userInteractionEnabled = YES;
-    if (_browserOptions.toolbarcolor != nil) { // Set toolbar color if user sets it in options
-        self.toolbar.barTintColor = [self colorFromHexString:_browserOptions.toolbarcolor];
+    if (_tunnelOptions.toolbarcolor != nil) { // Set toolbar color if user sets it in options
+        self.toolbar.barTintColor = [self colorFromHexString:_tunnelOptions.toolbarcolor];
     }
-    if (!_browserOptions.toolbartranslucent) { // Set toolbar translucent to no if user sets it in options
+    if (!_tunnelOptions.toolbartranslucent) { // Set toolbar translucent to no if user sets it in options
         self.toolbar.translucent = NO;
     }
 
@@ -1000,7 +998,7 @@ static NSString *urlEncode(id object) {
     self.backButton.imageInsets = UIEdgeInsetsZero;
 
     // Filter out Navigation Buttons if user requests so
-    if (_browserOptions.hidenavigationbuttons) {
+    if (_tunnelOptions.hidenavigationbuttons) {
         [self.toolbar setItems:@[self.closeButton, flexibleSpaceButton]];
     } else {
         [self.toolbar setItems:@[self.closeButton, flexibleSpaceButton, self.backButton, fixedSpaceButton, self.forwardButton]];
@@ -1115,7 +1113,7 @@ static NSString *urlEncode(id object) {
             self.toolbar.frame = toolbarFrame;
         }
 
-        if ([toolbarPosition isEqualToString:kInAppBrowserToolbarBarPositionTop]) {
+        if ([toolbarPosition isEqualToString:kLocalTunnelToolbarBarPositionTop]) {
             toolbarFrame.origin.y = 0;
             webViewBounds.origin.y += toolbarFrame.size.height;
             [self setWebViewFrame:webViewBounds];
@@ -1172,8 +1170,8 @@ static NSString *urlEncode(id object) {
     [CDVUserAgentUtil releaseLock:&_userAgentLockToken];
     self.currentURL = nil;
 
-    if ((self.navigationDelegate != nil) && [self.navigationDelegate respondsToSelector:@selector(browserExit)]) {
-        [self.navigationDelegate browserExit];
+    if ((self.navigationDelegate != nil) && [self.navigationDelegate respondsToSelector:@selector(tunnelExit)]) {
+        [self.navigationDelegate tunnelExit];
     }
 
     __weak UIViewController* weakSelf = self;
@@ -1264,7 +1262,7 @@ static NSString *urlEncode(id object) {
 }
 
 - (void) rePositionViews {
-    if ([_browserOptions.toolbarposition isEqualToString:kInAppBrowserToolbarBarPositionTop]) {
+    if ([_tunnelOptions.toolbarposition isEqualToString:kLocalTunnelToolbarBarPositionTop]) {
         [self.webView setFrame:CGRectMake(self.webView.frame.origin.x, TOOLBAR_HEIGHT, self.webView.frame.size.width, self.webView.frame.size.height)];
         [self.toolbar setFrame:CGRectMake(self.toolbar.frame.origin.x, [self getStatusBarOffset], self.toolbar.frame.size.width, self.toolbar.frame.size.height)];
     }
@@ -1388,7 +1386,7 @@ static NSString *urlEncode(id object) {
         self.location = YES;
         self.toolbar = YES;
         self.closebuttoncaption = nil;
-        self.toolbarposition = kInAppBrowserToolbarBarPositionBottom;
+        self.toolbarposition = kLocalTunnelToolbarBarPositionBottom;
         self.clearcache = NO;
         self.clearsessioncache = NO;
 
