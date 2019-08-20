@@ -410,7 +410,7 @@ static NSString *urlEncode(id object) {
     NSDictionary* requestParams = [request objectForKey:@"params"];
     NSString* method = [request objectForKey:@"method"];
     NSString* userAgent = [request objectForKey:@"useragent"];
-    enableRequestBlocking = [request objectForKey:@"enable_request_blocking"];
+    enableRequestBlocking = [[request objectForKey:@"enable_request_blocking"] boolValue];
 
     NSURL* lastRequestUrl = requestUrl;
     requestUrl = url;
