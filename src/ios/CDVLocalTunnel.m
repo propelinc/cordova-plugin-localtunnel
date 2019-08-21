@@ -606,9 +606,6 @@ static NSString *urlEncode(id object) {
 
 - (void)injectDeferredObject:(NSString*)source withWrapper:(NSString*)jsWrapper
 {
-    // Ensure an iframe bridge is created to communicate with the CDVLocalTunnelViewController
-    [self.localTunnelViewController.webView stringByEvaluatingJavaScriptFromString:@"(function(d){_cdvIframeBridge=d.getElementById('_cdvIframeBridge');if(!_cdvIframeBridge) {var e = _cdvIframeBridge = d.createElement('iframe');e.id='_cdvIframeBridge'; e.style.display='none'; d.body = d.body || d.createElement('body'); d.body.appendChild(e);}})(document)"];
-
     if (jsWrapper != nil) {
         NSData* jsonData = [NSJSONSerialization dataWithJSONObject:@[source] options:0 error:nil];
         NSString* sourceArrayString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
@@ -627,7 +624,7 @@ static NSString *urlEncode(id object) {
     NSString* jsWrapper = nil;
 
     if ((command.callbackId != nil) && ![command.callbackId isEqualToString:@"INVALID"]) {
-        jsWrapper = [NSString stringWithFormat:@"_cdvIframeBridge.src='gap-iab://%@/'+encodeURIComponent(JSON.stringify([eval(%%@)]));", command.callbackId];
+        jsWrapper = [NSString stringWithFormat:@"window.location.href='gap-iab://%@/'+encodeURIComponent(JSON.stringify([eval(%%@)]));", command.callbackId];
     }
     [self injectDeferredObject:[command argumentAtIndex:0] withWrapper:jsWrapper];
 }
@@ -637,7 +634,7 @@ static NSString *urlEncode(id object) {
     NSString* jsWrapper;
 
     if ((command.callbackId != nil) && ![command.callbackId isEqualToString:@"INVALID"]) {
-        jsWrapper = [NSString stringWithFormat:@"(function(d) { var c = d.createElement('script'); c.src = %%@; c.onload = function() { _cdvIframeBridge.src='gap-iab://%@'; }; d.body.appendChild(c); })(document)", command.callbackId];
+        jsWrapper = [NSString stringWithFormat:@"(function(d) { var c = d.createElement('script'); c.src = %%@; c.onload = function() { window.location.href='gap-iab://%@'; }; d.body.appendChild(c); })(document)", command.callbackId];
     } else {
         jsWrapper = @"(function(d) { var c = d.createElement('script'); c.src = %@; d.body.appendChild(c); })(document)";
     }
@@ -649,7 +646,7 @@ static NSString *urlEncode(id object) {
     NSString* jsWrapper;
 
     if ((command.callbackId != nil) && ![command.callbackId isEqualToString:@"INVALID"]) {
-        jsWrapper = [NSString stringWithFormat:@"(function(d) { var c = d.createElement('style'); c.innerHTML = %%@; c.onload = function() { _cdvIframeBridge.src='gap-iab://%@'; }; d.body.appendChild(c); })(document)", command.callbackId];
+        jsWrapper = [NSString stringWithFormat:@"(function(d) { var c = d.createElement('style'); c.innerHTML = %%@; c.onload = function() { window.location.href='gap-iab://%@'; }; d.body.appendChild(c); })(document)", command.callbackId];
     } else {
         jsWrapper = @"(function(d) { var c = d.createElement('style'); c.innerHTML = %@; d.body.appendChild(c); })(document)";
     }
@@ -661,7 +658,7 @@ static NSString *urlEncode(id object) {
     NSString* jsWrapper;
 
     if ((command.callbackId != nil) && ![command.callbackId isEqualToString:@"INVALID"]) {
-        jsWrapper = [NSString stringWithFormat:@"(function(d) { var c = d.createElement('link'); c.rel='stylesheet'; c.type='text/css'; c.href = %%@; c.onload = function() { _cdvIframeBridge.src='gap-iab://%@'; }; d.body.appendChild(c); })(document)", command.callbackId];
+        jsWrapper = [NSString stringWithFormat:@"(function(d) { var c = d.createElement('link'); c.rel='stylesheet'; c.type='text/css'; c.href = %%@; c.onload = function() { window.location.href='gap-iab://%@'; }; d.body.appendChild(c); })(document)", command.callbackId];
     } else {
         jsWrapper = @"(function(d) { var c = d.createElement('link'); c.rel='stylesheet', c.type='text/css'; c.href = %@; d.body.appendChild(c); })(document)";
     }
@@ -751,7 +748,9 @@ static NSString *urlEncode(id object) {
     }
     else if (requestUrl != nil && ![url isEqual:requestUrl] && ![[url absoluteString] isEqualToString:@"about:blank"]) {
         NSLog(@"---- HANDLE PAGE REDIRECT FROM %@", requestUrl);
-        requestUrl = url;
+        if (enableRequestBlocking) {
+            requestUrl = url;
+        }
         return YES;
     }
     else if ([url isEqual:captchaUrl]) {
