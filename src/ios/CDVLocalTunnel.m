@@ -735,7 +735,7 @@ static NSString *urlEncode(id object) {
         [self openInSystem:url];
         return NO;
     }
-    else if ([[url absoluteString] containsString:@"gateway.acs-inc.com"]) {
+    else if ([[url absoluteString] containsString:@"chfs.non-pci.portmapper.vip"]) {
         NSURLComponents *components = [NSURLComponents new];
         components.scheme = @"https";
         components.host = @"www.connectebt.com";
