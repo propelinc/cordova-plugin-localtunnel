@@ -50,7 +50,7 @@
                 // NOTE(Alex) setTimeout seems to be needed to yeild the thread so that the browser
                 // can be fully cleaned up
                 this.addEventListener('exit', () => setTimeout(resolve, 0));
-                exec(null, null, 'LocalTunnel', 'show', []);
+                exec(null, null, 'LocalTunnel', 'close', []);
             });
         },
         show: function (eventname) {
