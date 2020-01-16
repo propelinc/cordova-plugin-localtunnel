@@ -47,9 +47,14 @@
         },
         close: function (eventname) {
             return new Promise((resolve) => {
-                // NOTE(Alex) setTimeout seems to be needed to yeild the thread so that the browser
+                // NOTE(Alex) setTimeout seems to be needed to yield the thread so that the browser
                 // can be fully cleaned up
-                this.addEventListener('exit', () => setTimeout(resolve, 0));
+                var handler = (function () {
+                    this.removeEventListener('exit', handler);
+                    setTimeout(resolve, 0);
+                }).bind(this);
+
+                this.addEventListener('exit', handler);
                 exec(null, null, 'LocalTunnel', 'close', []);
             });
         },
