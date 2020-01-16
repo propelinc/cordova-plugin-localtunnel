@@ -46,7 +46,17 @@
             exec(success, error, 'LocalTunnel', 'getAllCookies', [url]);
         },
         close: function (eventname) {
-            exec(null, null, 'LocalTunnel', 'close', []);
+            return new Promise((resolve) => {
+                // NOTE(Alex) setTimeout seems to be needed to yield the thread so that the browser
+                // can be fully cleaned up
+                var handler = (function () {
+                    this.removeEventListener('exit', handler);
+                    setTimeout(resolve, 0);
+                }).bind(this);
+
+                this.addEventListener('exit', handler);
+                exec(null, null, 'LocalTunnel', 'close', []);
+            });
         },
         show: function (eventname) {
             exec(null, null, 'LocalTunnel', 'show', []);
