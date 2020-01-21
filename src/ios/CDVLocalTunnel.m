@@ -831,17 +831,22 @@ static NSString *urlEncode(id object) {
 
 - (void)tunnelExit
 {
+    // Set navigationDelegate to nil to ensure no callbacks are received from it.
+    self.localTunnelViewController.navigationDelegate = nil;
+    // Don't recycle the ViewController since it may be consuming a lot of memory.
+    // Also - this is required for the PDF/User-Agent bug work-around.
+    self.localTunnelViewController = nil;
+
+    // NOTE(Alex) We want to avoid race conditions where "exit" event happens before view controller
+    // is set to nil. This would happen if the sendPluginResult yeilds to the javascript call. To
+    // avoid any weirdness around erroneous localTunnelViewSetting, I have moved the
+    // sendPluginResult call to after we have set the localTunnelViewController to nil
     if (self.callbackId != nil) {
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
                                                       messageAsDictionary:@{@"type":@"exit"}];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:self.callbackId];
         self.callbackId = nil;
     }
-    // Set navigationDelegate to nil to ensure no callbacks are received from it.
-    self.localTunnelViewController.navigationDelegate = nil;
-    // Don't recycle the ViewController since it may be consuming a lot of memory.
-    // Also - this is required for the PDF/User-Agent bug work-around.
-    self.localTunnelViewController = nil;
 
     if (IsAtLeastiOSVersion(@"7.0")) {
         if (_previousStatusBarStyle != -1) {

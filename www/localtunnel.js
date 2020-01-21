@@ -51,7 +51,7 @@
                 // can be fully cleaned up
                 var handler = (function () {
                     this.removeEventListener('exit', handler);
-                    setTimeout(resolve, 0);
+                    resolve();
                 }).bind(this);
 
                 this.addEventListener('exit', handler);

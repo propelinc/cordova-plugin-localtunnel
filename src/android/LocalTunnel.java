@@ -512,20 +512,25 @@ public class LocalTunnel extends CordovaPlugin {
                             }
                             dialog = null;
                         }
+                        // NOTE(Alex) This used to be outside of this onPageFinished callback but it led to race conditions.
+                        // Specifically, we would await an exit event but that event would occur before dialog had been set
+                        // to null (which happens above). If you then called open again quickly enough, it became possible
+                        // for the dialog of the new instance to be set to null by the above call. These leads to tons of
+                        // wonkiness for the new dialog. The fix is to only say that we have exited after dialog is set to
+                        // null
+                        try {
+                            JSONObject obj = new JSONObject();
+                            obj.put("type", EXIT_EVENT);
+                            sendUpdate(obj, false);
+                        } catch (JSONException ex) {
+                            LOG.d(LOG_TAG, "Should never happen");
+                        }
                     }
                 });
                 // NB: From SDK 19: "If you call methods on WebView from any thread
                 // other than your app's UI thread, it can cause unexpected results."
                 // http://developer.android.com/guide/webapps/migrating.html#Threads
                 childView.loadUrl("about:blank");
-
-                try {
-                    JSONObject obj = new JSONObject();
-                    obj.put("type", EXIT_EVENT);
-                    sendUpdate(obj, false);
-                } catch (JSONException ex) {
-                    LOG.d(LOG_TAG, "Should never happen");
-                }
             }
         });
     }
