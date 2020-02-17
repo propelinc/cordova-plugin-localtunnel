@@ -747,11 +747,23 @@ static NSString *urlEncode(id object) {
         return NO;
     }
     else if (requestUrl != nil && ![url isEqual:requestUrl] && ![[url absoluteString] isEqualToString:@"about:blank"]) {
+        if (self.callbackId != nil && [[url absoluteString] containsString:@"www.google.com/recaptcha"]) {
+            NSLog(@"---- DETECTED REDIRECT TO RECAPTCHA.");
+            enableRequestBlocking = false;
+            NSArray* cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:requestUrl];
+            NSDictionary* cookieHeader = [NSHTTPCookie requestHeaderFieldsWithCookies:cookies];
+            NSString* cookieStr = [cookieHeader objectForKey:@"Cookie"];
+            CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
+                                                      messageAsDictionary:@{@"type":@"requestdone", @"url":[url absoluteString], @"cookies":cookieStr}];
+            [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
+            [self.commandDelegate sendPluginResult:pluginResult callbackId:self.callbackId];
+            return NO;
+        }
+
         NSLog(@"---- HANDLE PAGE REDIRECT FROM %@", requestUrl);
         if (enableRequestBlocking) {
             requestUrl = url;
         }
-        return YES;
     }
     else if ([url isEqual:captchaUrl]) {
         if (captchaCount++ > 0) {
