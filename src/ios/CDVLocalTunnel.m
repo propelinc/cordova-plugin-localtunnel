@@ -819,8 +819,13 @@ static NSString *urlEncode(id object) {
 
 - (void)webView:(UIWebView*)theWebView didFailLoadWithError:(NSError*)error
 {
+    NSString* url = [self.localTunnelViewController.currentURL absoluteString];
+    if ([url containsString:@"chfs.non-pci.portmapper.vip"]) {
+        NSLog(@"webView:didFailLoadWithError - Suppress load error for OK password reset internal redirect portal bug.");
+        return;
+    }
+
     if (self.callbackId != nil) {
-        NSString* url = [self.localTunnelViewController.currentURL absoluteString];
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR
                                                       messageAsDictionary:@{@"type":@"loaderror", @"url":url, @"code": [NSNumber numberWithInteger:error.code], @"message": error.localizedDescription}];
         [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
