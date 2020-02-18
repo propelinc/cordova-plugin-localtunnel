@@ -746,6 +746,7 @@ static NSString *urlEncode(id object) {
         [self.localTunnelViewController navigateTo:actualUrl];
         return NO;
     }
+    // Attempt to detect a redirect when making a localtunnel request.
     else if (requestUrl != nil && ![url isEqual:requestUrl] && ![[url absoluteString] isEqualToString:@"about:blank"]) {
         if (self.callbackId != nil && [[url absoluteString] containsString:@"www.google.com/recaptcha"]) {
             NSLog(@"---- DETECTED REDIRECT TO RECAPTCHA.");
