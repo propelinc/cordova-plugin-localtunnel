@@ -749,6 +749,9 @@ static NSString *urlEncode(id object) {
     // Attempt to detect a redirect when making a localtunnel request.
     else if (requestUrl != nil && ![url isEqual:requestUrl] && ![[url absoluteString] isEqualToString:@"about:blank"]) {
         if (self.callbackId != nil && [[url absoluteString] containsString:@"www.google.com/recaptcha"]) {
+            // We do not allow the recaptcha page to load because we need the incapsula (you are a robots) page
+            // to be returned to the server for our recaptcha flow to fully work. The browser issued redirect to
+            // recaptcha breaks this pattern.
             NSLog(@"---- DETECTED REDIRECT TO RECAPTCHA.");
             enableRequestBlocking = false;
             NSArray* cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:requestUrl];
@@ -834,6 +837,7 @@ static NSString *urlEncode(id object) {
 {
     NSString* url = [self.localTunnelViewController.currentURL absoluteString];
     if ([url containsString:@"chfs.non-pci.portmapper.vip"]) {
+        // Expired password page loads as expected but an erroneous error is being thrown by iOS.
         NSLog(@"webView:didFailLoadWithError - Suppress load error for OK password reset internal redirect portal bug.");
         return;
     }
