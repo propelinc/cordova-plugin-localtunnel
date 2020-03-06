@@ -748,7 +748,7 @@ static NSString *urlEncode(id object) {
     }
     // Attempt to detect a redirect when making a localtunnel request.
     else if (requestUrl != nil && ![url isEqual:requestUrl] && ![[url absoluteString] isEqualToString:@"about:blank"]) {
-        if (self.callbackId != nil && [[url absoluteString] containsString:@"www.google.com/recaptcha"]) {
+        if (self.callbackId != nil && [[url absoluteString] containsString:@"www.google.com/recaptcha"] && enableRequestBlocking) {
             // We do not allow the recaptcha page to load because we need the incapsula (you are a robots) page
             // to be returned to the server for our recaptcha flow to fully work. The browser issued redirect to
             // recaptcha breaks this pattern.
