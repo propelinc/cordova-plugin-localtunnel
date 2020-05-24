@@ -258,8 +258,10 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
         DispatchQueue.main.async {
             if self.presentingViewController != nil {
                 self.presentingViewController!.dismiss(animated: true, completion: postDismiss)
+            } else if self.parent != nil {
+                self.parent!.dismiss(animated: true, completion: postDismiss)
             } else {
-                self.parent?.dismiss(animated: true, completion: postDismiss)
+                postDismiss()
             }
         }
     }
