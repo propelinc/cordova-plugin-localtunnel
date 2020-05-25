@@ -18,21 +18,22 @@ struct RequestOptions {
 
 protocol PropagateDelegate {
     func requestDidSucceed(request: URLRequest?,  response: HTTPURLResponse?)
+    func requstDidFail(request: URLRequest?,  error: URLError)
     func shouldStartLoadForURL(url: String) -> Bool
     func webViewControllerDidClose()
 }
 
 @objc(CDVWKLocalTunnel) class CDVWKLocalTunnel : CDVPlugin, PropagateDelegate {
-    var webViewController: WebViewViewController!
+    var webViewController: WebViewViewController?
 
     var captchaCount = 0
 
-    var openCallbackId: String!
-    var closeCallbackId: String!
+    var openCallbackId: String?
+    var closeCallbackId: String?
 
-    var requestType: String!
-    var url: String!
-    var requestOptions: RequestOptions!
+    var requestType: String?
+    var url: String?
+    var requestOptions: RequestOptions?
 
     var webViewIsVisible = false
 
@@ -55,8 +56,10 @@ protocol PropagateDelegate {
     self.requestOptions = self.createRequestOptions(command: command)
     self.openCallbackId = command.callbackId;
 
+    print("Running open with %@ %@ %@", self.url, self.requestType, self.requestOptions)
+
     let runOpen = {
-        if self.requestOptions.displayWebview {
+        if self.requestOptions?.displayWebview ?? false {
             self.showWebView()
         } else {
             self.hideWebView()
@@ -64,17 +67,17 @@ protocol PropagateDelegate {
 
         if self.requestType == CLEAR_COOKIES_REQUEST {
             // Delete cookies asynchronously does not follow the pattern in other places of synchronously deleting the cookies
-            self.webViewController.clearCookies(completionHander: {
+            self.webViewController?.clearCookies(completionHander: {
                 let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK)
                 self.commandDelegate.send(pluginResult, callbackId: self.openCallbackId)
                 self.tearDown()
             })
         } else if self.requestType == HTTP_REQUEST {
-            var request = createRequest(urlString: self.url, method: self.requestOptions.method, params: self.requestOptions.params)
-            if self.requestOptions.cookies != nil {
-                request.addValue(self.requestOptions.cookies!, forHTTPHeaderField: "Cookie")
+            var request = createRequest(urlString: self.url ?? "", method: self.requestOptions?.method ?? "GET", params: self.requestOptions?.params)
+            if self.requestOptions?.cookies != nil {
+                request.addValue(self.requestOptions!.cookies!, forHTTPHeaderField: "Cookie")
             }
-            self.webViewController.webView.load(request)
+            self.webViewController?.webView.load(request)
 
             // NOTE(Alex): I cannot seem to make sending multiple commandDelegate responses on open work. So I am not sending one on the initial open and will just send one when the load is done
 //            let pluginResult = CDVPluginResult(status: CDVCommandStatus_NO_RESULT)
@@ -82,16 +85,14 @@ protocol PropagateDelegate {
 //            self.commandDelegate.send(pluginResult, callbackId: self.callbackId)
 
         } else if self.requestType == CAPTCHA_REQUEST {
-            self.webViewController.webView.loadHTMLString(self.requestOptions.captchaContentHtml!, baseURL: URL(string: self.url))
-            let pluginResult = CDVPluginResult(status: CDVCommandStatus_ERROR)
-            self.commandDelegate.send(pluginResult, callbackId: self.openCallbackId)
+            self.webViewController?.webView.loadHTMLString(self.requestOptions?.captchaContentHtml ?? "", baseURL: URL(string: self.url ?? ""))
         }
     }
 
-    if self.webViewController == nil {
+    if self.webViewController == nil  && self.requestOptions != nil{
         self.webViewController = WebViewViewController()
-        self.webViewController.propagateDelegate = self;
-        self.webViewController.createWebView(requestOptions, completionHander: {
+        self.webViewController?.propagateDelegate = self;
+        self.webViewController?.createWebView(self.requestOptions!, completionHander: {
             runOpen()
         })
     } else {
@@ -102,7 +103,10 @@ protocol PropagateDelegate {
     @objc(injectScriptCode:)
     func injectScriptCode(command: CDVInvokedUrlCommand) {
         let jsCode = command.arguments[0] as? String ?? ""
-        self.webViewController.runJavascript(jsCode: jsCode, completionHandler: { returnVal, error in
+
+        print("Running injectScriptCode with %@ %@ %@", jsCode)
+
+        self.webViewController!.runJavascript(jsCode: jsCode, completionHandler: { returnVal, error in
             if error == nil {
                 let executeResponse = returnVal as? String ?? ""
                 NSLog("Javascript code: %@ output: %@", jsCode, executeResponse)
@@ -114,13 +118,15 @@ protocol PropagateDelegate {
 
     @objc(close:)
     func close(command: CDVInvokedUrlCommand) {
+        print("Running close")
+
         self.closeCallbackId = command.callbackId
         self.tearDown()
     }
 
     func tearDown() {
         self.hideWebView()
-        self.webViewController.close()
+        self.webViewController?.close()
     }
 
     private func createRequestOptions(command: CDVInvokedUrlCommand) -> RequestOptions {
@@ -135,14 +141,14 @@ protocol PropagateDelegate {
         }
 
         let passedHidden = passedRequestOptions["hidden"] as? Bool? ?? nil
-        let displayWebview =  windowFeatures == "hidden=no" || passedHidden == true
+        let displayWebview =  windowFeatures == "hidden=no" || passedHidden == false
         var requestOptions = RequestOptions(blockNonEssentialRequests: passedRequestOptions["enable_request_blocking"] as? Bool ?? false, displayWebview: displayWebview, method: passedRequestOptions["method"] as? String ?? "get")
 
         if passedRequestOptions["content"] != nil {
             requestOptions.captchaContentHtml = passedRequestOptions["content"] as? String ?? nil
         }
 
-        let passedCookies = passedRequestOptions["key"] as? String? ?? nil
+        let passedCookies = passedRequestOptions["cookies"] as? String? ?? nil
         if passedCookies != nil && passedCookies != "" {
             requestOptions.cookies = passedCookies!
         }
@@ -182,9 +188,9 @@ protocol PropagateDelegate {
 
     func requestDidSucceed(request: URLRequest?,  response: HTTPURLResponse?) {
         if (self.requestType == HTTP_REQUEST) {
-            let currentURL = self.webViewController.currentURL
+            let currentURL = self.webViewController?.currentURL
 
-            self.webViewController.getCookiesForUrl(currentURL ?? "", completionHandler: {cookies in
+            self.webViewController?.getCookiesForUrl(currentURL ?? "", completionHandler: {cookies in
                 let callbackId = self.openCallbackId
                 self.openCallbackId = nil
 
@@ -200,13 +206,30 @@ protocol PropagateDelegate {
         }
     }
 
+    func requstDidFail(request: URLRequest?,  error: URLError) {
+        let callbackId = self.openCallbackId
+        self.openCallbackId = nil
+
+        let currentURL = self.webViewController?.currentURL
+
+        let pluginResult = CDVPluginResult(status:CDVCommandStatus_ERROR, messageAs: [
+            "type": "loaderror",
+            "url": currentURL,
+            "code": error.code.rawValue,
+            "message": error.localizedDescription,
+        ])
+        pluginResult?.setKeepCallbackAs(true)
+
+        self.commandDelegate.send(pluginResult, callbackId: callbackId)
+    }
+
     func webViewControllerDidClose() {
         self.webViewController = nil
 
         let callbackId = self.closeCallbackId
         self.closeCallbackId = nil
         if callbackId != nil {
-            let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: ["type": "exist"])
+            let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: ["type": "exit"])
 
             self.commandDelegate.send(pluginResult, callbackId: callbackId)
         }
@@ -217,7 +240,7 @@ protocol PropagateDelegate {
             // First load is simply adding the html to the page
             // Second load occurs when the incapsula script tries to reload the page
             if url == self.url && self.captchaCount > 0 {
-                self.webViewController.getCookiesForUrl(url, completionHandler: {cookies in
+                self.webViewController?.getCookiesForUrl(url, completionHandler: {cookies in
                     let callbackId = self.openCallbackId
                     self.openCallbackId = nil
 
@@ -238,18 +261,18 @@ protocol PropagateDelegate {
     }
 
     func showWebView() {
-        if !self.webViewIsVisible {
+        if !self.webViewIsVisible && self.webViewController != nil {
             self.webViewIsVisible = true
-            self.viewController.show(self.webViewController, sender: self)
+            self.viewController.show(self.webViewController!, sender: self)
         } else {
             NSLog("Tried to show the WebView when already visible")
         }
     }
 
     func hideWebView() {
-        if self.webViewIsVisible {
+        if self.webViewIsVisible && self.webViewController != nil{
             self.webViewIsVisible = false
-            self.webViewController.dismiss(animated: false)
+            self.webViewController!.dismiss(animated: false)
         } else {
             NSLog("Tried to hide WebView when it is not already visible")
         }
@@ -259,6 +282,7 @@ protocol PropagateDelegate {
 
 struct NavigationData {
     var request: URLRequest?
+    var redirectCount = 0
 }
 
 class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegate {
@@ -433,6 +457,14 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
     func webView(_ webView: WKWebView,
                           didReceiveServerRedirectForProvisionalNavigation navigation: WKNavigation!) {
 
+        var navigationData = self.navigationData[navigation]
+        if navigationData != nil && navigationData!.redirectCount >= 5 {
+            print("Forcing the request to fail because of too many redirects")
+            self.propagateDelegate.requstDidFail(request: self.navigationData[navigation]?.request, error: URLError(URLError.Code.init(rawValue: -100)))
+            self.navigationData[navigation] = nil
+        } else if navigationData != nil {
+            self.navigationData[navigation]!.redirectCount += 1
+        }
         NSLog("in webviewDelegate:didReceiveServerRedirectForProvisionalNavigation %@", navigation)
     }
 
@@ -443,8 +475,11 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
 
     func webView(_ webView: WKWebView,
     didFailProvisionalNavigation navigation: WKNavigation!,
-    withError error: Error) {
+    withError error: URLError) {
         print("in webviewDelegate:didFailProvisional %@ %@", navigation, error)
+
+        self.propagateDelegate.requstDidFail(request: self.navigationData[navigation]?.request, error: error)
+        self.navigationData[navigation] = nil
 //        self.propagateDelegate.webView?(webView, didFailProvisionalNavigation: navigation, withError: error)
     }
 
@@ -453,7 +488,7 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
         NSLog("in webViewDelegate:DidFinish %@", navigation)
 
         self.finishedResponse = nil
-        self.propagateDelegate.requestDidSucceed(request: self.navigationData[navigation]!.request, response: self.finishedResponse)
+        self.propagateDelegate.requestDidSucceed(request: self.navigationData[navigation]?.request, response: self.finishedResponse)
         self.navigationData[navigation] = nil
     }
 
@@ -493,21 +528,6 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
         print("in webViewDelegate:DecisionHandlerResponse %@ %@", navigationResponse.response, decisionHandler)
         self.finishedResponse = httpResponse
         decisionHandler(WKNavigationResponsePolicy.allow);
-    }
-
-
-    //MARK: WKUIDelegate
-    // This is for launching new webViews
-    func webView(_ webView: WKWebView,
-    createWebViewWith configuration: WKWebViewConfiguration,
-                  for navigationAction: WKNavigationAction,
-                  windowFeatures: WKWindowFeatures) -> WKWebView? {
-        NSLog("in WKUIDelegate: createWebviewWith %@ %@ %@", configuration, navigationAction, windowFeatures)
-        return nil;
-    }
-
-    func webViewDidClose(_ webView: WKWebView) {
-        NSLog("in WKUIDelegate:webViewDidClose")
     }
 
 }
