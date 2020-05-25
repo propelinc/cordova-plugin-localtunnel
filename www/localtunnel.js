@@ -46,10 +46,16 @@
             exec(success, error, 'LocalTunnel', 'getAllCookies', [url]);
         },
         close: function (eventname) {
-            //NOTE(ALEX) I switched up this function to work for my new iOS
-            // This will probably break android atm
             return new Promise((resolve) => {
-                exec(resolve, null, 'LocalTunnel', 'close', []);
+                // NOTE(Alex) setTimeout seems to be needed to yield the thread so that the browser
+                // can be fully cleaned up
+                var handler = (function () {
+                    this.removeEventListener('exit', handler);
+                    resolve();
+                }).bind(this);
+
+                this.addEventListener('exit', handler);
+                exec(null, null, 'LocalTunnel', 'close', []);
             });
         },
         show: function (eventname) {

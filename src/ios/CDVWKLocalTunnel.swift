@@ -29,7 +29,6 @@ protocol PropagateDelegate {
     var captchaCount = 0
 
     var openCallbackId: String?
-    var closeCallbackId: String?
 
     var requestType: String?
     var url: String?
@@ -41,7 +40,6 @@ protocol PropagateDelegate {
         self.captchaCount = 0
 
         self.openCallbackId = nil
-        self.closeCallbackId = nil
 
         self.requestType = nil
         self.url = nil
@@ -80,9 +78,9 @@ protocol PropagateDelegate {
             self.webViewController?.webView.load(request)
 
             // NOTE(Alex): I cannot seem to make sending multiple commandDelegate responses on open work. So I am not sending one on the initial open and will just send one when the load is done
-//            let pluginResult = CDVPluginResult(status: CDVCommandStatus_NO_RESULT)
-//            pluginResult!.setKeepCallbackAs(true)
-//            self.commandDelegate.send(pluginResult, callbackId: self.callbackId)
+            let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK)
+            pluginResult!.setKeepCallbackAs(true)
+            self.commandDelegate.send(pluginResult, callbackId: self.openCallbackId)
 
         } else if self.requestType == CAPTCHA_REQUEST {
             self.webViewController?.webView.loadHTMLString(self.requestOptions?.captchaContentHtml ?? "", baseURL: URL(string: self.url ?? ""))
@@ -106,7 +104,7 @@ protocol PropagateDelegate {
 
         print("Running injectScriptCode with %@ %@ %@", jsCode)
 
-        self.webViewController!.runJavascript(jsCode: jsCode, completionHandler: { returnVal, error in
+        self.webViewController?.runJavascript(jsCode: jsCode, completionHandler: { returnVal, error in
             if error == nil {
                 let executeResponse = returnVal as? String ?? ""
                 NSLog("Javascript code: %@ output: %@", jsCode, executeResponse)
@@ -119,8 +117,6 @@ protocol PropagateDelegate {
     @objc(close:)
     func close(command: CDVInvokedUrlCommand) {
         print("Running close")
-
-        self.closeCallbackId = command.callbackId
         self.tearDown()
     }
 
@@ -167,32 +163,12 @@ protocol PropagateDelegate {
         return requestOptions
     }
 
-
-    // Prop
-
-    // Whole reason we need these functions is to propagate success and errors from the WKWebview
-    // So that proper PluginResults can be sent back to the javascript layer. This delegate pattern
-    // Helps avoid having to pass self.commandDelegate around and isolates all Javascript interface
-    // code to this class
-
-//    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-//        print("in webviewDelegate:didFail %@ %@", navigation, error)
-//    }
-//
-//    func webView(_ webView: WKWebView,
-//    didFailProvisionalNavigation navigation: WKNavigation!,
-//    withError error: Error) {
-//        print("in webviewDelegate:didFailProvisional %@ %@", navigation, error)
-//    }
-
-
     func requestDidSucceed(request: URLRequest?,  response: HTTPURLResponse?) {
         if (self.requestType == HTTP_REQUEST) {
             let currentURL = self.webViewController?.currentURL
 
             self.webViewController?.getCookiesForUrl(currentURL ?? "", completionHandler: {cookies in
                 let callbackId = self.openCallbackId
-                self.openCallbackId = nil
 
                 let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: [
                     "type": "requestdone",
@@ -208,7 +184,6 @@ protocol PropagateDelegate {
 
     func requstDidFail(request: URLRequest?,  error: URLError) {
         let callbackId = self.openCallbackId
-        self.openCallbackId = nil
 
         let currentURL = self.webViewController?.currentURL
 
@@ -225,9 +200,8 @@ protocol PropagateDelegate {
 
     func webViewControllerDidClose() {
         self.webViewController = nil
+        let callbackId = self.openCallbackId
 
-        let callbackId = self.closeCallbackId
-        self.closeCallbackId = nil
         if callbackId != nil {
             let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: ["type": "exit"])
 
@@ -242,7 +216,6 @@ protocol PropagateDelegate {
             if url == self.url && self.captchaCount > 0 {
                 self.webViewController?.getCookiesForUrl(url, completionHandler: {cookies in
                     let callbackId = self.openCallbackId
-                    self.openCallbackId = nil
 
                     let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: [
                         "type": "captchadone",
