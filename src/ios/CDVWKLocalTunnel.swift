@@ -17,36 +17,62 @@ struct RequestOptions {
 }
 
 protocol PropagateDelegate {
-    func requestDidSucceed(request: URLRequest,  response: HTTPURLResponse)
+    func requestDidSucceed(request: URLRequest?,  response: HTTPURLResponse?)
+    func shouldStartLoadForURL(url: String) -> Bool
     func webViewControllerDidClose()
 }
 
 @objc(CDVWKLocalTunnel) class CDVWKLocalTunnel : CDVPlugin, PropagateDelegate {
     var webViewController: WebViewViewController!
+
+    var captchaCount = 0
+
     var openCallbackId: String!
     var closeCallbackId: String!
 
+    var requestType: String!
+    var url: String!
+    var requestOptions: RequestOptions!
+
+    var webViewIsVisible = false
+
+    func clearState() {
+        self.captchaCount = 0
+
+        self.openCallbackId = nil
+        self.closeCallbackId = nil
+
+        self.requestType = nil
+        self.url = nil
+    }
+
   @objc(open:)
   func open(command: CDVInvokedUrlCommand) {
+    self.clearState()
 
-    let url: String = command.arguments[0] as? String ?? ""
-    let requestType = command.arguments[1] as? String ?? ""
-    let requestOptions = self.createRequestOptions(command: command)
+    self.url = command.arguments[0] as? String ?? ""
+    self.requestType = command.arguments[1] as? String ?? ""
+    self.requestOptions = self.createRequestOptions(command: command)
     self.openCallbackId = command.callbackId;
 
-    self.webViewController = WebViewViewController()
-    self.webViewController.propagateDelegate = self;
+    let runOpen = {
+        if self.requestOptions.displayWebview {
+            self.showWebView()
+        } else {
+            self.hideWebView()
+        }
 
-    webViewController.createWebView(requestOptions, completionHander: {
-        if (requestType == CLEAR_COOKIES_REQUEST) {
+        if self.requestType == CLEAR_COOKIES_REQUEST {
+            // Delete cookies asynchronously does not follow the pattern in other places of synchronously deleting the cookies
             self.webViewController.clearCookies(completionHander: {
                 let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK)
                 self.commandDelegate.send(pluginResult, callbackId: self.openCallbackId)
+                self.tearDown()
             })
-        } else if (requestType == HTTP_REQUEST) {
-            var request = createRequest(urlString: url, method: requestOptions.method, params: requestOptions.params)
-            if requestOptions.cookies != nil {
-                request.addValue(requestOptions.cookies!, forHTTPHeaderField: "Cookie")
+        } else if self.requestType == HTTP_REQUEST {
+            var request = createRequest(urlString: self.url, method: self.requestOptions.method, params: self.requestOptions.params)
+            if self.requestOptions.cookies != nil {
+                request.addValue(self.requestOptions.cookies!, forHTTPHeaderField: "Cookie")
             }
             self.webViewController.webView.load(request)
 
@@ -55,11 +81,22 @@ protocol PropagateDelegate {
 //            pluginResult!.setKeepCallbackAs(true)
 //            self.commandDelegate.send(pluginResult, callbackId: self.callbackId)
 
-        } else if (requestType == CAPTCHA_REQUEST) {
+        } else if self.requestType == CAPTCHA_REQUEST {
+            self.webViewController.webView.loadHTMLString(self.requestOptions.captchaContentHtml!, baseURL: URL(string: self.url))
             let pluginResult = CDVPluginResult(status: CDVCommandStatus_ERROR)
             self.commandDelegate.send(pluginResult, callbackId: self.openCallbackId)
         }
-    })
+    }
+
+    if self.webViewController == nil {
+        self.webViewController = WebViewViewController()
+        self.webViewController.propagateDelegate = self;
+        self.webViewController.createWebView(requestOptions, completionHander: {
+            runOpen()
+        })
+    } else {
+        runOpen()
+    }
    }
 
     @objc(injectScriptCode:)
@@ -78,6 +115,11 @@ protocol PropagateDelegate {
     @objc(close:)
     func close(command: CDVInvokedUrlCommand) {
         self.closeCallbackId = command.callbackId
+        self.tearDown()
+    }
+
+    func tearDown() {
+        self.hideWebView()
         self.webViewController.close()
     }
 
@@ -110,6 +152,7 @@ protocol PropagateDelegate {
             requestOptions.params = passedParams
         }
 
+        // Using server passed user agents seemed to dramaticaly increase the Incapsula issues we hit
         let passedUserAgent = passedRequestOptions["useragent"] as? String ?? ""
         if passedUserAgent != "" {
             requestOptions.userAgent = passedUserAgent
@@ -117,6 +160,7 @@ protocol PropagateDelegate {
 
         return requestOptions
     }
+
 
     // Prop
 
@@ -136,21 +180,24 @@ protocol PropagateDelegate {
 //    }
 
 
-    func requestDidSucceed(request: URLRequest,  response: HTTPURLResponse) {
-        let currentURL = self.webViewController.currentURL
+    func requestDidSucceed(request: URLRequest?,  response: HTTPURLResponse?) {
+        if (self.requestType == HTTP_REQUEST) {
+            let currentURL = self.webViewController.currentURL
 
-        self.webViewController.getCookiesForUrl(currentURL ?? "", completionHandler: {cookies in
-            let callbackId = self.openCallbackId
-            self.openCallbackId = nil
+            self.webViewController.getCookiesForUrl(currentURL ?? "", completionHandler: {cookies in
+                let callbackId = self.openCallbackId
+                self.openCallbackId = nil
 
-            let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: [
-                "type": "requestdone",
-                "url": currentURL,
-                "cookies": convertCookiesToString(cookies)
-            ])
+                let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: [
+                    "type": "requestdone",
+                    "url": currentURL,
+                    "cookies": convertCookiesToString(cookies)
+                ])
+                pluginResult?.setKeepCallbackAs(true)
 
-            self.commandDelegate.send(pluginResult, callbackId: callbackId)
-        })
+                self.commandDelegate.send(pluginResult, callbackId: callbackId)
+            })
+        }
     }
 
     func webViewControllerDidClose() {
@@ -158,16 +205,60 @@ protocol PropagateDelegate {
 
         let callbackId = self.closeCallbackId
         self.closeCallbackId = nil
+        if callbackId != nil {
+            let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: ["type": "exist"])
 
-        let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: ["type": "exist"])
+            self.commandDelegate.send(pluginResult, callbackId: callbackId)
+        }
+    }
 
-        self.commandDelegate.send(pluginResult, callbackId: callbackId)
+    func shouldStartLoadForURL(url: String) -> Bool {
+        if self.requestType == CAPTCHA_REQUEST {
+            // First load is simply adding the html to the page
+            // Second load occurs when the incapsula script tries to reload the page
+            if url == self.url && self.captchaCount > 0 {
+                self.webViewController.getCookiesForUrl(url, completionHandler: {cookies in
+                    let callbackId = self.openCallbackId
+                    self.openCallbackId = nil
+
+                    let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: [
+                        "type": "captchadone",
+                        "url": url,
+                        "cookies": convertCookiesToString(cookies)
+                    ])
+
+                    self.commandDelegate.send(pluginResult, callbackId: callbackId)
+                })
+                return false
+            } else if url == self.url {
+                self.captchaCount += 1
+            }
+        }
+        return true
+    }
+
+    func showWebView() {
+        if !self.webViewIsVisible {
+            self.webViewIsVisible = true
+            self.viewController.show(self.webViewController, sender: self)
+        } else {
+            NSLog("Tried to show the WebView when already visible")
+        }
+    }
+
+    func hideWebView() {
+        if self.webViewIsVisible {
+            self.webViewIsVisible = false
+            self.webViewController.dismiss(animated: false)
+        } else {
+            NSLog("Tried to hide WebView when it is not already visible")
+        }
     }
 
   }
 
 struct NavigationData {
-    var request: URLRequest
+    var request: URLRequest?
 }
 
 class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegate {
@@ -180,6 +271,8 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
     var startedRequest: URLRequest?
     // Stored on the class so that `decidePolicyFor:NavigationResponse` can set it and then `didFinish` can grab unset and add to navigationData
     var finishedResponse: HTTPURLResponse?
+
+    var isVisible = false;
 
 
     // TODO: add an initializer
@@ -332,7 +425,7 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
     func webView(_ webView: WKWebView,
                  didStartProvisionalNavigation navigation: WKNavigation!) {
 
-        self.navigationData[navigation] = NavigationData(request: self.startedRequest!)
+        self.navigationData[navigation] = NavigationData(request: self.startedRequest)
         self.startedRequest = nil
         NSLog("in webviewDelegate:didStartProvisionalNavigation %@", navigation)
     }
@@ -359,9 +452,8 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
                  didFinish navigation: WKNavigation!) {
         NSLog("in webViewDelegate:DidFinish %@", navigation)
 
-        let response = self.finishedResponse!
         self.finishedResponse = nil
-        self.propagateDelegate.requestDidSucceed(request: self.navigationData[navigation]!.request, response: response)
+        self.propagateDelegate.requestDidSucceed(request: self.navigationData[navigation]!.request, response: self.finishedResponse)
         self.navigationData[navigation] = nil
     }
 
@@ -379,8 +471,10 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
 
      print("in webViewDelegate:DecisionHandler %@ %@", navigationAction.request, decisionHandler)
 
-        // always open in the same frame, don't open new ones
-        if (navigationAction.targetFrame == nil) {
+        if !(self.propagateDelegate.shouldStartLoadForURL(url: navigationAction.request.url?.absoluteString ?? "")) {
+            decisionHandler(WKNavigationActionPolicy.cancel);
+        } else if (navigationAction.targetFrame == nil) {
+            // always open in the same frame, don't open new ones
             webView.load(navigationAction.request);
             decisionHandler(WKNavigationActionPolicy.cancel);
         } else {
@@ -417,6 +511,12 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
     }
 
 }
+
+// Copied from https://github.com/apache/cordova-plugin-inappbrowser/blob/master/src/ios/CDVInAppBrowserNavigationController.h
+class CDVInAppBrowserNavigationController: UINavigationController {
+    weak var orientationDelegate: CDVScreenOrientationDelegate?
+}
+
 
 // HELPER FUNCTIONS
 // Built using this: https://useyourloaf.com/blog/how-to-percent-encode-a-url-string/ and comparing

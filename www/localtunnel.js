@@ -100,6 +100,7 @@
         }
 
         var cb = function (eventname) {
+            console.info(eventname)
             iab._eventHandler(eventname);
         };
 
