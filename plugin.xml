@@ -73,15 +73,12 @@
         </js-module>
         <config-file target="config.xml" parent="/*">
             <feature name="LocalTunnel">
-                <param name="ios-package" value="CDVLocalTunnel" />
+                <param name="ios-package" value="CDVWKLocalTunnel" />
             </feature>
         </config-file>
 
-        <header-file src="src/ios/CDVLocalTunnel.h" />
-	    <source-file src="src/ios/CDVLocalTunnel.m" />
 
-        <header-file src="src/ios/swizzling.h" />
-	    <source-file src="src/ios/swizzling.m" />
+	    <source-file src="src/ios/CDVWKLocalTunnel.swift" />
 
 	    <framework src="CoreGraphics.framework" />
     </platform>
