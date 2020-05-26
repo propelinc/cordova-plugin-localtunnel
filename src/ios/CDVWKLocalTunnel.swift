@@ -47,7 +47,7 @@ struct RequestOptions {
 */
 protocol WebViewPropagateDelegate {
     func requestDidSucceed(request: URLRequest?,  response: HTTPURLResponse?)
-    func requstDidFail(request: URLRequest?,  error: URLError)
+    func requestDidFail(request: URLRequest?,  error: URLError)
     func shouldStartLoadForURL(url: String) -> Bool
     func webViewControllerDidClose()
 }
@@ -75,13 +75,12 @@ protocol WebViewPropagateDelegate {
 
     var openCallbackId: String?
 
-    func clearState() {
+    func resetsState() {
         self.requestOptions = nil
 
         self.captchaCount = 0
 
         self.openCallbackId = nil
-
     }
 
     /*
@@ -94,7 +93,7 @@ protocol WebViewPropagateDelegate {
     */
     @objc(open:)
     func open(command: CDVInvokedUrlCommand) {
-        self.clearState()
+        self.resetsState()
         self.requestOptions = self.createRequestOptions(command: command)
         self.openCallbackId = command.callbackId;
 
@@ -108,7 +107,7 @@ protocol WebViewPropagateDelegate {
             }
 
             if self.requestOptions?.requestType == CLEAR_COOKIES_REQUEST {
-                // This deletes cookies asynchronously. This is a different pattern then was used in CDVLocalTunnel.m
+                // This deletes cookies asynchronously
                 self.webViewController?.clearCookies(completionHander: {
                     let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK)
                     self.commandDelegate.send(pluginResult, callbackId: self.openCallbackId)
@@ -244,7 +243,7 @@ protocol WebViewPropagateDelegate {
         }
     }
 
-    func requstDidFail(request: URLRequest?,  error: URLError) {
+    func requestDidFail(request: URLRequest?,  error: URLError) {
         let currentURL = self.webViewController?.webView.url?.absoluteString
 
         let pluginResult = CDVPluginResult(status:CDVCommandStatus_ERROR, messageAs: [
@@ -368,7 +367,7 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
         }
 
         // Copied from inappbrowser
-        // https://github.com/apache/cordova-plugin-inappbrowser/blob/master/src/ios/CDVWKInAppBrowser.m#L776
+        // https://github.com/apache/cordova-plugin-inappbrowser/blob/3.2.x/src/ios/CDVWKInAppBrowser.m#L789
         self.webView.clearsContextBeforeDrawing = true
         self.webView.clipsToBounds = true
         self.webView.contentMode = UIViewContentMode.scaleToFill
@@ -501,7 +500,7 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
         if navigationData != nil && navigationData!.redirectCount >= 5 {
             print("Forcing the request to fail because of too many redirects")
             let error = URLError(URLError.Code.init(rawValue: -100))
-            self.propagateDelegate.requstDidFail(request: self.navigationData[navigation]?.request, error: error)
+            self.propagateDelegate.requestDidFail(request: self.navigationData[navigation]?.request, error: error)
             self.navigationData[navigation] = nil
         } else if navigationData != nil {
             self.navigationData[navigation]!.redirectCount += 1
@@ -511,14 +510,14 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: URLError) {
         print("in webviewDelegate:didFail \nnavigation: \(navigation) \nerror: \(error)")
 
-        self.propagateDelegate.requstDidFail(request: self.navigationData[navigation]?.request, error: error)
+        self.propagateDelegate.requestDidFail(request: self.navigationData[navigation]?.request, error: error)
         self.navigationData[navigation] = nil
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: URLError) {
         print("in webviewDelegate:didFailProvisional \nnavigation: \(navigation) \nerror: \(error)")
 
-        self.propagateDelegate.requstDidFail(request: self.navigationData[navigation]?.request, error: error)
+        self.propagateDelegate.requestDidFail(request: self.navigationData[navigation]?.request, error: error)
         self.navigationData[navigation] = nil
     }
 
