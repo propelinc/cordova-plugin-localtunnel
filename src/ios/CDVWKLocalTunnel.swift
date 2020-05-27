@@ -535,10 +535,19 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
      print("in webViewDelegate:DecisionHandler \nnavigationAction:\(navigationAction)")
+        let requestUrl = navigationAction.request.url
 
-        if !(self.propagateDelegate.shouldStartLoadForURL(url: navigationAction.request.url?.absoluteString ?? "")) {
+        // Corrects for erroneous redirects in Oklahoma
+        if requestUrl?.absoluteString.contains("chfs.non-pci.portmapper.vip") ?? false {
             decisionHandler(WKNavigationActionPolicy.cancel);
-        } else if (navigationAction.targetFrame == nil) {
+
+            let path = requestUrl?.path ?? ""
+            let query = requestUrl?.query != nil ? "?\(requestUrl!.query!)" : ""
+            let urlString = "https://www.connectebt.com\(path)\(query)"
+            webView.load(createRequest(urlString: urlString, method: "GET"))
+        } else if !(self.propagateDelegate.shouldStartLoadForURL(url: requestUrl?.absoluteString ?? "")) {
+            decisionHandler(WKNavigationActionPolicy.cancel);
+        } else if navigationAction.targetFrame == nil {
             // This is the case where WKWebview wants to open a link in a new page
             // Instead we cancel the request and start the request in this page
             webView.load(navigationAction.request);
