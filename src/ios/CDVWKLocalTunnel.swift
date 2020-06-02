@@ -328,7 +328,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
     var isVisible = false;
 
     var urlSession: URLSession!
-    var handling302 = false
+    var handling3XX = false
 
 
     init() {
@@ -526,27 +526,37 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
         if navigationData?.request != nil && navigationData?.request?.httpMethod == "GET" {
             self.webView.stopLoading()
 
-            self.handling302 = true
+            self.handling3XX = true
             let task = self.urlSession.dataTask(with: navigationData!.request!) { (data, response, error) in
-                self.handling302 = false
-                let statusCode = (response as! HTTPURLResponse).statusCode
-                let headers = (response as! HTTPURLResponse).allHeaderFields
-                if 300 <= statusCode && statusCode < 400 && headers["Location"] != nil {
-                    let location = headers["Location"] as? String ?? ""
-                    let makeRequestBlock = {
-                        print("Loading url in WKWebview after manually handling redirect")
-                        let redirectRequest = createRequest(urlString: location, method: "GET")
-                        self.webView.load(redirectRequest)
+                self.handling3XX = false
+
+                if error == nil {
+                    let statusCode = (response as! HTTPURLResponse).statusCode
+                    let headers = (response as! HTTPURLResponse).allHeaderFields
+                    if 300 <= statusCode && statusCode < 400 && headers["Location"] != nil {
+                        let location = headers["Location"] as? String ?? ""
+
+                        let cookies = HTTPCookie.cookies(withResponseHeaderFields: headers as! [String: String], for: URL(string:location)!)
+                        self.setCookies(cookies: cookies, completionHandler: {
+                            print("Loading url in WKWebview after manually handling redirect")
+                            let redirectRequest = createRequest(urlString: location, method: "GET")
+                            self.webView.load(redirectRequest)
+                        })
+
+                    } else if headers["Location"] == nil {
+                        print("Manually handling redirect did not work - no location")
+                        let error = URLError(URLError.Code.init(rawValue: -100))
+                        self.propagateDelegate.requestDidFail(request: navigationData?.request, error: error)
+                    } else {
+                        print("Manually handling redirect did not work - non redirect status code")
+                        let error = URLError(URLError.Code.init(rawValue: -101))
+                        self.propagateDelegate.requestDidFail(request: navigationData?.request, error: error)
                     }
-
-                    let cookies = HTTPCookie.cookies(withResponseHeaderFields: headers as! [String: String], for: URL(string:location)!)
-                    self.setCookies(cookies: cookies, completionHandler: makeRequestBlock)
-
-                }
-                else {
-                    print("Manually handling redirect did not work")
-                    let error = URLError(URLError.Code.init(rawValue: -100))
+                } else {
+                    print("Manually handling redirect did not work - error making request")
+                    let error = URLError(URLError.Code.init(rawValue: -102))
                     self.propagateDelegate.requestDidFail(request: navigationData?.request, error: error)
+
                 }
 
             }
@@ -557,7 +567,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: URLError) {
         print("in webviewDelegate:didFail \nnavigation: \(navigation) \nerror: \(error)")
 
-        if !self.handling302 {
+        if !self.handling3XX {
             self.propagateDelegate.requestDidFail(request: self.navigationData[navigation]?.request, error: error)
             self.navigationData[navigation] = nil
         }
@@ -566,7 +576,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: URLError) {
         print("in webviewDelegate:didFailProvisional \nnavigation: \(navigation) \nerror: \(error)")
 
-        if !self.handling302 {
+        if !self.handling3XX {
             self.propagateDelegate.requestDidFail(request: self.navigationData[navigation]?.request, error: error)
             self.navigationData[navigation] = nil
         }
@@ -633,11 +643,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
     // Returning nil in this function will return the 302 response to the dataTask
     // completion handler.
     // https://developer.apple.com/documentation/foundation/urlsessiontaskdelegate/1411626-urlsession
-    func urlSession(_ session: URLSession,
-                        task: URLSessionTask,
-    willPerformHTTPRedirection response: HTTPURLResponse,
-                  newRequest request: URLRequest,
-                  completionHandler: @escaping (URLRequest?) -> Void) {
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
         completionHandler(nil)
     }
     //////////////////////////////////////////
