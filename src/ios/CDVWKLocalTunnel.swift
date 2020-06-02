@@ -156,6 +156,8 @@ protocol WebViewPropagateDelegate {
                 let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: [jsResponse])
                 pluginResult?.setKeepCallbackAs(true)
                 self.commandDelegate.send(pluginResult, callbackId: command.callbackId)
+            } else {
+                print("Ran into an issue running javascript: \(error!)")
             }
         })
     }
@@ -298,7 +300,6 @@ protocol WebViewPropagateDelegate {
 
 struct NavigationData {
     var request: URLRequest?
-    var redirectCount = 0
 }
 
 /*
@@ -308,7 +309,7 @@ struct NavigationData {
     the plugins interface and allow WebViewViewController to deal with the navigation and routing
     logic
 */
-class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegate {
+class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigationDelegate, WKUIDelegate {
     var webView: WKWebView!
     var blockRules: String;
     var propagateDelegate: WebViewPropagateDelegate!
@@ -325,6 +326,9 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
     var finishedResponse: HTTPURLResponse?
 
     var isVisible = false;
+
+    var urlSession: URLSession!
+    var handling302 = false
 
 
     init() {
@@ -346,6 +350,8 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
         self.blockRules = jsonDumps(blockRulesDict) ?? "[]"
 
         super.init(nibName:nil, bundle: nil)
+
+        self.urlSession = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue: nil)
     }
 
     // NOTE(Alex) - I am not sure what to do with this initializer. Xcode insists
@@ -429,16 +435,26 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
 
     func clearCookies(completionHander: @escaping () -> Void){
         self.webView.configuration.websiteDataStore.httpCookieStore.getAllCookies({cookies in
-            self.deleteCookies(cookies: cookies, completionHandler: completionHander)
+            self.recursiveClearCookies(cookies: cookies, completionHandler: completionHander)
         })
     }
 
-    private func deleteCookies(cookies: [HTTPCookie], completionHandler: @escaping () -> Void) {
+    private func recursiveClearCookies(cookies: [HTTPCookie], completionHandler: @escaping () -> Void) {
         if cookies.count == 0 {
             completionHandler()
         } else {
             self.webView.configuration.websiteDataStore.httpCookieStore.delete(cookies[0], completionHandler: {
-                self.deleteCookies(cookies: Array(cookies[1...]), completionHandler: completionHandler)
+                self.recursiveClearCookies(cookies: Array(cookies[1...]), completionHandler: completionHandler)
+            })
+        }
+    }
+
+    private func setCookies(cookies: [HTTPCookie], completionHandler: @escaping () -> Void) {
+        if cookies.count == 0 {
+            completionHandler()
+        } else {
+            self.webView.configuration.websiteDataStore.httpCookieStore.setCookie(cookies[0], completionHandler: {
+                self.setCookies(cookies: Array(cookies[1...]), completionHandler: completionHandler)
             })
         }
     }
@@ -495,30 +511,65 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
 
         var navigationData = self.navigationData[navigation]
 
-        // There seems to be an Incapsula state where it tries to redirect us to the page
-        // many times. If we notice that is happening, we should just fail the request
-        if navigationData != nil && navigationData!.redirectCount >= 5 {
-            print("Forcing the request to fail because of too many redirects")
-            let error = URLError(URLError.Code.init(rawValue: -100))
-            self.propagateDelegate.requestDidFail(request: self.navigationData[navigation]?.request, error: error)
-            self.navigationData[navigation] = nil
-        } else if navigationData != nil {
-            self.navigationData[navigation]!.redirectCount += 1
+        // WKWebview does not give you any way to see the actually 3XX response or alter
+        // the behavior of redirects. WKWebview also does not proerly deal with cookies
+        // passed in redirects. This means that we need to manually deal with redirects.
+        // The pattern we use is:
+        // 1. Detect when the WKWebview receives a server redirect and stop the loading of that page
+        // 2. Use UrlSession to manually load the url that got redirected.
+        // 3. Have the URLSessionTaskDelegate disallow automatic redirect
+        // 4. In the completion handler for URLSession request, grab the 3XX response
+        // and manually set up cookies as needed. Once cookies are set up create a new
+        // WKWebview request to the new "Location" header specified in the 3XX response.
+        //
+        // NOTE: We only deal with GET redirects at the moment
+        if navigationData?.request != nil && navigationData?.request?.httpMethod == "GET" {
+            self.webView.stopLoading()
+
+            self.handling302 = true
+            let task = self.urlSession.dataTask(with: navigationData!.request!) { (data, response, error) in
+                self.handling302 = false
+                let statusCode = (response as! HTTPURLResponse).statusCode
+                let headers = (response as! HTTPURLResponse).allHeaderFields
+                if 300 <= statusCode && statusCode < 400 && headers["Location"] != nil {
+                    let location = headers["Location"] as? String ?? ""
+                    let makeRequestBlock = {
+                        print("Loading url in WKWebview after manually handling redirect")
+                        let redirectRequest = createRequest(urlString: location, method: "GET")
+                        self.webView.load(redirectRequest)
+                    }
+
+                    let cookies = HTTPCookie.cookies(withResponseHeaderFields: headers as! [String: String], for: URL(string:location)!)
+                    self.setCookies(cookies: cookies, completionHandler: makeRequestBlock)
+
+                }
+                else {
+                    print("Manually handling redirect did not work")
+                    let error = URLError(URLError.Code.init(rawValue: -100))
+                    self.propagateDelegate.requestDidFail(request: navigationData?.request, error: error)
+                }
+
+            }
+            task.resume()
         }
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: URLError) {
         print("in webviewDelegate:didFail \nnavigation: \(navigation) \nerror: \(error)")
 
-        self.propagateDelegate.requestDidFail(request: self.navigationData[navigation]?.request, error: error)
-        self.navigationData[navigation] = nil
+        if !self.handling302 {
+            self.propagateDelegate.requestDidFail(request: self.navigationData[navigation]?.request, error: error)
+            self.navigationData[navigation] = nil
+        }
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: URLError) {
         print("in webviewDelegate:didFailProvisional \nnavigation: \(navigation) \nerror: \(error)")
 
-        self.propagateDelegate.requestDidFail(request: self.navigationData[navigation]?.request, error: error)
-        self.navigationData[navigation] = nil
+        if !self.handling302 {
+            self.propagateDelegate.requestDidFail(request: self.navigationData[navigation]?.request, error: error)
+            self.navigationData[navigation] = nil
+        }
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -570,6 +621,27 @@ class WebViewViewController: UIViewController, WKUIDelegate, WKNavigationDelegat
 
     //////////////////////////////////////////
     // WKNavigationDelegate Methods Start   //
+    //////////////////////////////////////////
+
+
+
+    //////////////////////////////////////////
+    // NSURLSessionTaskDelegate Methods Start   //
+    //////////////////////////////////////////
+
+    // To handle 302s with cookies properly we need to not automatically redirect.
+    // Returning nil in this function will return the 302 response to the dataTask
+    // completion handler.
+    // https://developer.apple.com/documentation/foundation/urlsessiontaskdelegate/1411626-urlsession
+    func urlSession(_ session: URLSession,
+                        task: URLSessionTask,
+    willPerformHTTPRedirection response: HTTPURLResponse,
+                  newRequest request: URLRequest,
+                  completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(nil)
+    }
+    //////////////////////////////////////////
+    // NSURLSessionTaskDelegate Methods End   //
     //////////////////////////////////////////
 
 }
