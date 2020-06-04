@@ -894,6 +894,8 @@ public class LocalTunnel extends CordovaPlugin {
 
                 // WebView
                 localTunnelWebView = new WebView(cordova.getActivity());
+                // By default navigator.onLine is false.
+                localTunnelWebView.setNetworkAvailable(true);
                 localTunnelWebView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
                 localTunnelWebView.setId(Integer.valueOf(6));
                 // File Chooser Implemented ChromeClient
