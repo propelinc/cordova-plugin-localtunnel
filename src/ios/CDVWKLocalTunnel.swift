@@ -48,7 +48,7 @@ struct RequestOptions {
 protocol WebViewPropagateDelegate {
     func requestDidSucceed(request: URLRequest?,  response: HTTPURLResponse?)
     func requestDidFail(request: URLRequest?,  error: URLError)
-    func shouldStartLoadForURL(url: String) -> Bool
+    func shouldStartLoadForURL(request: URLRequest) -> Bool
     func webViewControllerDidClose()
 }
 
@@ -65,6 +65,7 @@ protocol WebViewPropagateDelegate {
     CDVWKLocalTunnel communicates back to the javascript layer using the `self.commandDelegate.send`
     call. This call expects a PluginResponse and a valid callback id
 */
+
 @objc(CDVWKLocalTunnel) class CDVWKLocalTunnel : CDVPlugin, WebViewPropagateDelegate {
     var webViewController: WebViewViewController?
     var webViewIsVisible = false
@@ -115,12 +116,9 @@ protocol WebViewPropagateDelegate {
                 })
             } else if self.requestOptions?.requestType == HTTP_REQUEST {
                 var request = createRequest(urlString: self.requestOptions?.url ?? "", method: self.requestOptions?.method ?? "GET", params: self.requestOptions?.params)
-                if self.requestOptions?.cookies != nil {
-                    request.addValue(self.requestOptions!.cookies!, forHTTPHeaderField: "Cookie")
-                }
-                self.webViewController?.webView.load(request)
+                self.webViewController?.urlSessionLoad(request, requestOptions: self.requestOptions)
             } else if self.requestOptions?.requestType == CAPTCHA_REQUEST {
-                self.webViewController?.webView.loadHTMLString(self.requestOptions?.captchaContentHtml ?? "", baseURL: URL(string: self.requestOptions?.url ?? ""))
+                self.webViewController?.loadHTMLString(self.requestOptions?.captchaContentHtml ?? "", baseURL: URL(string: self.requestOptions?.url ?? ""))
             }
         }
 
@@ -234,6 +232,7 @@ protocol WebViewPropagateDelegate {
             let currentURL = self.webViewController?.webView.url?.absoluteString
 
             self.webViewController?.getCookiesForUrl(currentURL ?? "", completionHandler: {cookies in
+                print("Cookies \(cookies)")
                 let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: [
                     "type": "requestdone",
                     "url": currentURL,
@@ -265,7 +264,8 @@ protocol WebViewPropagateDelegate {
         self.commandDelegate.send(pluginResult, callbackId: self.openCallbackId)
     }
 
-    func shouldStartLoadForURL(url: String) -> Bool {
+    func shouldStartLoadForURL(request: URLRequest) -> Bool {
+        let url = request.url?.absoluteString ?? ""
         if self.requestOptions?.requestType == CAPTCHA_REQUEST {
 
             // The first load is always called directly after loadHTMLString. It indicates
@@ -275,19 +275,44 @@ protocol WebViewPropagateDelegate {
             // incapsula then tries to reload the original processor page. We do not need load
             // the processor page though. We just need to grab the cookies and inform the
             // javascript layer that the captcha is done
-            if url == self.requestOptions?.url && self.captchaCount > 0 {
-                self.webViewController?.getCookiesForUrl(url, completionHandler: {cookies in
-                    let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: [
-                        "type": "captchadone",
-                        "url": url,
-                        "cookies": convertCookiesToString(cookies)
-                    ])
-                    pluginResult?.setKeepCallbackAs(true)
-                    self.commandDelegate.send(pluginResult, callbackId: self.openCallbackId)
-                })
-                return false
-            } else if url == self.requestOptions?.url {
+            if url == self.requestOptions?.url && self.captchaCount == 0 {
                 self.captchaCount += 1
+                return true
+            } else if url == self.requestOptions?.url && self.captchaCount == 1 {
+                self.captchaCount += 1
+
+                let getCookiesAndReturn = {
+                    self.webViewController?.getCookies { cookies in
+                        let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: [
+                            "type": "captchadone",
+                            "url": url,
+                            "cookies": convertCookiesToString(cookies)
+                        ])
+                        pluginResult?.setKeepCallbackAs(true)
+                        self.commandDelegate.send(pluginResult, callbackId: self.openCallbackId)
+                    }
+                }
+
+                DispatchQueue.main.async {
+                    // Incapsula sets some cookies in document.cookie that do not get
+                    // properly propagated back up to the HTTPCookieStore. To rectify this
+                    // we grab the cookies in javascript and save them to the HTTPCookieStore.
+                    self.webViewController?.runJavascript(jsCode: "document.cookie", completionHandler: { cookieString, data in
+                            if cookieString != nil {
+                                print("Successfully grabbed cookie string from js \(cookieString!)")
+                                let cookies = convertStringToCookies(cookieString as! String, host: request.url?.host ?? "")
+                                self.webViewController?.setCookies(cookies: cookies, completionHandler:{
+                                        getCookiesAndReturn()
+                                    }
+                                )
+                            } else {
+                                print("Failed to get cookie string")
+                                getCookiesAndReturn()
+                            }
+                        }
+                    )
+                }
+                return false
             }
         }
         return true
@@ -328,7 +353,6 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
     var isVisible = false;
 
     var urlSession: URLSession!
-    var handling3XX = false
 
 
     init() {
@@ -420,6 +444,105 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
         }
     }
 
+    // WKWebview does not do a great job handling cookies
+    //  * It does not set cookies on redirect
+    //  * It does not always propagate the document.cookie object up to HTTPCookieStore
+    //
+    // This function uses urlSession to make all requests and update cookies properly.
+    // Once the request has succeeded, the response is loaded into the WKWebview. This
+    // will allow users of the plugin to still interact with the WKWebview as if it was
+    // loading all requests itself.
+    func urlSessionLoad(_ request: URLRequest, requestOptions: RequestOptions? = nil) {
+        self.makeURLSessionRequest(request, requestOptions: requestOptions, completionHandler: { url, data, response, error in
+            if error == nil && url != nil {
+                DispatchQueue.main.async {
+                    self.webView.load(data!, mimeType: "text/html", characterEncodingName: "utf8", baseURL: url!)
+                }
+            } else if error != nil {
+                self.propagateDelegate.requestDidFail(request: request, error: error!)
+            } else {
+                print("No response returned from urlSessionLoad")
+                let error = URLError(URLError.Code.init(rawValue: -100))
+                self.propagateDelegate.requestDidFail(request: request, error: error)
+            }
+        })
+    }
+
+    // Defaulting to using storedCookies always unless storedCookies is empty and
+    // requesetOptionCookies has a value
+    func combineCookies(requestOptionCookies: [HTTPCookie], storedCookies: [HTTPCookie]) -> [HTTPCookie] {
+        var cookieNames: Set<String> = []
+        var returnCookies: [HTTPCookie] = []
+
+        if storedCookies.count > 0 {
+            return storedCookies
+        } else {
+            return requestOptionCookies
+        }
+    }
+
+    func makeURLSessionRequest(_ passedRequest: URLRequest, requestOptions: RequestOptions?, completionHandler: @escaping (URL?, Data?, URLResponse?, URLError?) -> Void) {
+        print("Making request to \(passedRequest.url)")
+
+        self.getCookiesForUrl(passedRequest.url?.absoluteString ?? "", completionHandler: {storedCookies in
+            var request = passedRequest
+
+            let requestOptionCookies: [HTTPCookie] = requestOptions?.cookies != nil ? convertStringToCookies(requestOptions!.cookies!, host:request.url?.host ?? "") : []
+
+            let requestCookies = self.combineCookies(requestOptionCookies: requestOptionCookies, storedCookies: storedCookies)
+            let cookieDict = HTTPCookie.requestHeaderFields(with: requestCookies)
+            request.addValue(cookieDict["Cookie"] ?? "", forHTTPHeaderField: "Cookie")
+
+            let task = self.urlSession.dataTask(with: request) { (data, response, error) in
+                if error == nil {
+                    let statusCode = (response as! HTTPURLResponse).statusCode
+                    let headers = (response as! HTTPURLResponse).allHeaderFields
+
+                    if 200 <= statusCode && statusCode < 400 {
+                        let returnedCookies = HTTPCookie.cookies(withResponseHeaderFields: headers as! [String: String], for: request.url!)
+
+                        self.setCookies(cookies: returnedCookies, completionHandler: {
+                            print("Set cookies from URL response \(returnedCookies) \(response)")
+
+                            if 200 <= statusCode && statusCode < 300 {
+                                completionHandler(request.url, data, response, nil)
+                            } else if 300 <= statusCode && statusCode < 400 && headers["Location"] != nil {
+
+                                let location = headers["Location"] as! String
+                                var redirectRequest: URLRequest
+                                if location.starts(with: "/") {
+                                    redirectRequest = createRequest(urlString: "\(request.url?.host)\(location)", method: "GET")
+                                } else {
+                                    redirectRequest = createRequest(urlString: location, method: "GET")
+                                }
+
+                                self.makeURLSessionRequest(redirectRequest, requestOptions: requestOptions, completionHandler: completionHandler)
+                            } else {
+                                print("No location header passed in 3XX Redirect")
+                                let error = URLError(URLError.Code.init(rawValue: -300))
+                                completionHandler(nil, nil, nil, error)
+                            }
+                        })
+                    } else {
+                        print("Url request returned non success error code")
+                        let error = URLError(URLError.Code.init(rawValue: -1 * statusCode))
+                        completionHandler(nil, nil, nil, error)
+                    }
+
+                } else {
+                    print("Url request hit an error")
+                    let defaultError = URLError(URLError.Code.init(rawValue: -100))
+                    completionHandler(nil, nil, nil, error as? URLError ?? defaultError)
+                }
+            }
+            task.resume()
+        })
+    }
+
+    func loadHTMLString(_ htmlString: String, baseURL: URL?) {
+        self.webView.loadHTMLString(htmlString, baseURL: baseURL)
+    }
+
     //////////////////////////////////////////
     // Cookie Methods Start                 //
     //////////////////////////////////////////
@@ -434,9 +557,11 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
     // their web browser
 
     func clearCookies(completionHander: @escaping () -> Void){
-        self.webView.configuration.websiteDataStore.httpCookieStore.getAllCookies({cookies in
-            self.recursiveClearCookies(cookies: cookies, completionHandler: completionHander)
-        })
+        DispatchQueue.main.async {
+            self.webView.configuration.websiteDataStore.httpCookieStore.getAllCookies({cookies in
+                self.recursiveClearCookies(cookies: cookies, completionHandler: completionHander)
+            })
+        }
     }
 
     private func recursiveClearCookies(cookies: [HTTPCookie], completionHandler: @escaping () -> Void) {
@@ -449,41 +574,49 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
         }
     }
 
-    private func setCookies(cookies: [HTTPCookie], completionHandler: @escaping () -> Void) {
+    func setCookies(cookies: [HTTPCookie], completionHandler: @escaping () -> Void) {
         if cookies.count == 0 {
             completionHandler()
         } else {
-            self.webView.configuration.websiteDataStore.httpCookieStore.setCookie(cookies[0], completionHandler: {
-                self.setCookies(cookies: Array(cookies[1...]), completionHandler: completionHandler)
-            })
+            DispatchQueue.main.async {
+                self.webView.configuration.websiteDataStore.httpCookieStore.setCookie(cookies[0], completionHandler: {
+                    self.setCookies(cookies: Array(cookies[1...]), completionHandler: completionHandler)
+                })
+            }
         }
     }
 
     func printCookies(completionHander: @escaping () -> Void) {
-        self.webView.configuration.websiteDataStore.httpCookieStore.getAllCookies({cookies in
-            for cookie in cookies {
-                print("Cookie: \(cookie)")
-            }
-            completionHander()
-        })
+        DispatchQueue.main.async {
+            self.webView.configuration.websiteDataStore.httpCookieStore.getAllCookies({cookies in
+                for cookie in cookies {
+                    print("Cookie: \(cookie)")
+                }
+                completionHander()
+            })
+        }
     }
 
     func getCookies(completionHander: @escaping ([HTTPCookie]) -> Void) {
-        self.webView.configuration.websiteDataStore.httpCookieStore.getAllCookies({cookies in
-            completionHander(cookies)
-        })
+        DispatchQueue.main.async {
+            self.webView.configuration.websiteDataStore.httpCookieStore.getAllCookies({cookies in
+                completionHander(cookies)
+            })
+        }
     }
 
     func getCookiesForUrl(_ url: String, completionHandler: @escaping ([HTTPCookie]) -> Void) {
-        self.webView.configuration.websiteDataStore.httpCookieStore.getAllCookies({cookies in
-            var returnCookies: [HTTPCookie] = []
-            for cookie in cookies {
-                if url.contains(cookie.domain) {
-                    returnCookies.append(cookie)
+        DispatchQueue.main.async {
+            self.webView.configuration.websiteDataStore.httpCookieStore.getAllCookies({cookies in
+                var returnCookies: [HTTPCookie] = []
+                for cookie in cookies {
+                    if url.contains(cookie.domain) {
+                        returnCookies.append(cookie)
+                    }
                 }
-            }
-            completionHandler(returnCookies)
-        })
+                completionHandler(returnCookies)
+            })
+        }
     }
 
     //////////////////////////////////////////
@@ -510,76 +643,20 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
         print("in webviewDelegate:didReceiveServerRedirectForProvisionalNavigation \(navigation)")
 
         var navigationData = self.navigationData[navigation]
-
-        // WKWebview does not give you any way to see the actually 3XX response or alter
-        // the behavior of redirects. WKWebview also does not proerly deal with cookies
-        // passed in redirects. This means that we need to manually deal with redirects.
-        // The pattern we use is:
-        // 1. Detect when the WKWebview receives a server redirect and stop the loading of that page
-        // 2. Use UrlSession to manually load the url that got redirected.
-        // 3. Have the URLSessionTaskDelegate disallow automatic redirect
-        // 4. In the completion handler for URLSession request, grab the 3XX response
-        // and manually set up cookies as needed. Once cookies are set up create a new
-        // WKWebview request to the new "Location" header specified in the 3XX response.
-        //
-        // NOTE: We only deal with GET redirects at the moment
-        if navigationData?.request != nil && navigationData?.request?.httpMethod == "GET" {
-            self.webView.stopLoading()
-
-            self.handling3XX = true
-            let task = self.urlSession.dataTask(with: navigationData!.request!) { (data, response, error) in
-                self.handling3XX = false
-
-                if error == nil {
-                    let statusCode = (response as! HTTPURLResponse).statusCode
-                    let headers = (response as! HTTPURLResponse).allHeaderFields
-                    if 300 <= statusCode && statusCode < 400 && headers["Location"] != nil {
-                        let location = headers["Location"] as? String ?? ""
-
-                        let cookies = HTTPCookie.cookies(withResponseHeaderFields: headers as! [String: String], for: URL(string:location)!)
-                        self.setCookies(cookies: cookies, completionHandler: {
-                            print("Loading url in WKWebview after manually handling redirect")
-                            let redirectRequest = createRequest(urlString: location, method: "GET")
-                            self.webView.load(redirectRequest)
-                        })
-
-                    } else if headers["Location"] == nil {
-                        print("Manually handling redirect did not work - no location")
-                        let error = URLError(URLError.Code.init(rawValue: -100))
-                        self.propagateDelegate.requestDidFail(request: navigationData?.request, error: error)
-                    } else {
-                        print("Manually handling redirect did not work - non redirect status code")
-                        let error = URLError(URLError.Code.init(rawValue: -101))
-                        self.propagateDelegate.requestDidFail(request: navigationData?.request, error: error)
-                    }
-                } else {
-                    print("Manually handling redirect did not work - error making request")
-                    let error = URLError(URLError.Code.init(rawValue: -102))
-                    self.propagateDelegate.requestDidFail(request: navigationData?.request, error: error)
-
-                }
-
-            }
-            task.resume()
-        }
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: URLError) {
         print("in webviewDelegate:didFail \nnavigation: \(navigation) \nerror: \(error)")
 
-        if !self.handling3XX {
-            self.propagateDelegate.requestDidFail(request: self.navigationData[navigation]?.request, error: error)
-            self.navigationData[navigation] = nil
-        }
+        self.propagateDelegate.requestDidFail(request: self.navigationData[navigation]?.request, error: error)
+        self.navigationData[navigation] = nil
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: URLError) {
         print("in webviewDelegate:didFailProvisional \nnavigation: \(navigation) \nerror: \(error)")
 
-        if !self.handling3XX {
-            self.propagateDelegate.requestDidFail(request: self.navigationData[navigation]?.request, error: error)
-            self.navigationData[navigation] = nil
-        }
+        self.propagateDelegate.requestDidFail(request: self.navigationData[navigation]?.request, error: error)
+        self.navigationData[navigation] = nil
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -606,7 +683,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
             let query = requestUrl?.query != nil ? "?\(requestUrl!.query!)" : ""
             let urlString = "https://www.connectebt.com\(path)\(query)"
             webView.load(createRequest(urlString: urlString, method: "GET"))
-        } else if !(self.propagateDelegate.shouldStartLoadForURL(url: requestUrl?.absoluteString ?? "")) {
+        } else if !(self.propagateDelegate.shouldStartLoadForURL(request: navigationAction.request)) {
             decisionHandler(WKNavigationActionPolicy.cancel);
         } else if navigationAction.targetFrame == nil {
             // This is the case where WKWebview wants to open a link in a new page
@@ -733,6 +810,32 @@ func jsonDumps(_ jsonObject: Any) -> String? {
 
 func convertCookiesToString(_ cookies: [HTTPCookie]) -> String {
     return HTTPCookie.requestHeaderFields(with: cookies)["Cookie"] ?? ""
+}
+
+func convertStringToCookies(_ cookieString: String, host: String) -> [HTTPCookie] {
+    var cookies: [HTTPCookie] = []
+    if cookieString == "" {
+        return cookies
+    }
+
+    let hostParts = host.components(separatedBy: "www")
+    let domain = hostParts[1]
+
+    for cookiePair in cookieString.components(separatedBy: "; ") {
+        let subComponents = cookiePair.components(separatedBy: "=")
+
+        let cookie = HTTPCookie(properties: [
+            HTTPCookiePropertyKey.domain: domain,
+            HTTPCookiePropertyKey.path: "/",
+            HTTPCookiePropertyKey.name: subComponents[0],
+            HTTPCookiePropertyKey.value: subComponents[1],
+        ])
+        if cookie != nil {
+            cookies.append(cookie!)
+        }
+    }
+
+    return cookies
 }
 
 //////////////////////////////////////////
