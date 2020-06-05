@@ -31,6 +31,7 @@ let CAPTCHA_REQUEST = "_captcha"
 struct RequestOptions {
     var blockNonEssentialRequests: Bool
     var displayWebview: Bool
+    var isContentJSON: Bool
     var method: String
     var requestType: String
     var url: String
@@ -115,7 +116,13 @@ protocol WebViewPropagateDelegate {
                     self.destroyWebViewController()
                 })
             } else if self.requestOptions?.requestType == HTTP_REQUEST {
-                var request = createRequest(urlString: self.requestOptions?.url ?? "", method: self.requestOptions?.method ?? "GET", params: self.requestOptions?.params)
+                var request: URLRequest
+                if self.requestOptions?.method.lowercased() == "post" {
+                    let postType = self.requestOptions!.isContentJSON ? "json" : "form"
+                    request = createRequest(urlString: self.requestOptions!.url, method: self.requestOptions!.method, params: self.requestOptions!.params, postType: postType)
+                } else {
+                    request = createRequest(urlString: self.requestOptions?.url ?? "", method: self.requestOptions?.method ?? "GET", params: self.requestOptions?.params)
+                }
                 self.webViewController?.urlSessionLoad(request, requestOptions: self.requestOptions)
             } else if self.requestOptions?.requestType == CAPTCHA_REQUEST {
                 self.webViewController?.loadHTMLString(self.requestOptions?.captchaContentHtml ?? "", baseURL: URL(string: self.requestOptions?.url ?? ""))
@@ -181,7 +188,13 @@ protocol WebViewPropagateDelegate {
 
         let passedMethod = passedOptions["method"] as? String ?? "GET"
 
-        var requestOptions = RequestOptions(blockNonEssentialRequests: passedBlock, displayWebview: displayWebview, method: passedMethod, requestType: requestType, url: url)
+        var isContentJSON = false
+        let passedHeaders = passedOptions["headers"] as? [String: String] ?? [:]
+        if passedHeaders["Content-Type"] == "application/json" {
+            isContentJSON = true
+        }
+
+        var requestOptions = RequestOptions(blockNonEssentialRequests: passedBlock, displayWebview: displayWebview, isContentJSON: isContentJSON, method: passedMethod, requestType: requestType, url: url)
 
         if passedOptions["content"] != nil {
             requestOptions.captchaContentHtml = passedOptions["content"] as? String ?? nil
@@ -819,16 +832,24 @@ func convertStringToCookies(_ cookieString: String, host: String) -> [HTTPCookie
     }
 
     let hostParts = host.components(separatedBy: "www")
-    let domain = hostParts[1]
+    var domain: String
+    if hostParts.count == 2 {
+         domain = hostParts[1]
+    } else {
+        domain = host
+    }
 
     for cookiePair in cookieString.components(separatedBy: "; ") {
-        let subComponents = cookiePair.components(separatedBy: "=")
+        let equalsIndex = cookiePair.firstIndex(of: "=")!
+        let equalsIndexPlusOne = cookiePair.index(equalsIndex, offsetBy: 1)
+        let name = cookiePair[..<equalsIndex]
+        let value = cookiePair[equalsIndexPlusOne...]
 
         let cookie = HTTPCookie(properties: [
             HTTPCookiePropertyKey.domain: domain,
             HTTPCookiePropertyKey.path: "/",
-            HTTPCookiePropertyKey.name: subComponents[0],
-            HTTPCookiePropertyKey.value: subComponents[1],
+            HTTPCookiePropertyKey.name: name,
+            HTTPCookiePropertyKey.value: value,
         ])
         if cookie != nil {
             cookies.append(cookie!)
