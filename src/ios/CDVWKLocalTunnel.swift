@@ -77,6 +77,8 @@ protocol WebViewPropagateDelegate {
 
     var openCallbackId: String?
 
+    var clearCookiesOnNextRequest = false
+
     func resetsState() {
         self.requestOptions = nil
 
@@ -101,6 +103,14 @@ protocol WebViewPropagateDelegate {
 
         print("Running open with \nrequest_options: \(self.requestOptions)")
 
+        // The javascript client expects that calling open(..., "_clearcookies") should
+        // clear the cookies synchronously. WKWebivew cannot clear cookies synchronously.
+        // To properly handle this, we synchronously set a variable. On the next request, we clear the cookies and cleanup the variable
+        if self.requestOptions?.requestType == CLEAR_COOKIES_REQUEST {
+            self.clearCookiesOnNextRequest = true
+            return
+        }
+
         let runOpen = {
             if self.requestOptions?.displayWebview ?? false {
                 self.showWebView()
@@ -108,24 +118,28 @@ protocol WebViewPropagateDelegate {
                 self.hideWebView()
             }
 
-            if self.requestOptions?.requestType == CLEAR_COOKIES_REQUEST {
-                // This deletes cookies asynchronously
-                self.webViewController?.clearCookies(completionHander: {
-                    let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK)
-                    self.commandDelegate.send(pluginResult, callbackId: self.openCallbackId)
-                    self.destroyWebViewController()
-                })
-            } else if self.requestOptions?.requestType == HTTP_REQUEST {
-                var request: URLRequest
-                if self.requestOptions?.method.lowercased() == "post" {
-                    let postType = self.requestOptions!.isContentJSON ? "json" : "form"
-                    request = createRequest(urlString: self.requestOptions!.url, method: self.requestOptions!.method, params: self.requestOptions!.params, postType: postType)
-                } else {
-                    request = createRequest(urlString: self.requestOptions?.url ?? "", method: self.requestOptions?.method ?? "GET", params: self.requestOptions?.params)
+            let makeRequestsBlock = {
+                if self.requestOptions?.requestType == HTTP_REQUEST {
+                    var request: URLRequest
+                    if self.requestOptions?.method.lowercased() == "post" {
+                        let postType = self.requestOptions!.isContentJSON ? "json" : "form"
+                        request = createRequest(urlString: self.requestOptions!.url, method: self.requestOptions!.method, params: self.requestOptions!.params, postType: postType)
+                    } else {
+                        request = createRequest(urlString: self.requestOptions?.url ?? "", method: self.requestOptions?.method ?? "GET", params: self.requestOptions?.params)
+                    }
+                    self.webViewController?.urlSessionLoad(request, requestOptions: self.requestOptions)
+                } else if self.requestOptions?.requestType == CAPTCHA_REQUEST {
+                    self.webViewController?.loadHTMLString(self.requestOptions?.captchaContentHtml ?? "", baseURL: URL(string: self.requestOptions?.url ?? ""))
                 }
-                self.webViewController?.urlSessionLoad(request, requestOptions: self.requestOptions)
-            } else if self.requestOptions?.requestType == CAPTCHA_REQUEST {
-                self.webViewController?.loadHTMLString(self.requestOptions?.captchaContentHtml ?? "", baseURL: URL(string: self.requestOptions?.url ?? ""))
+            }
+
+            if self.clearCookiesOnNextRequest {
+                self.clearCookiesOnNextRequest = false
+                self.webViewController?.clearCookies {
+                    makeRequestsBlock()
+                }
+            } else {
+                makeRequestsBlock()
             }
         }
 
