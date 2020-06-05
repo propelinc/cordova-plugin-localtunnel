@@ -107,21 +107,33 @@ public class LocalTunnelChromeClient extends WebChromeClient {
             if(defaultValue.startsWith("gap-iab://")) {
                 PluginResult scriptResult;
                 String scriptCallbackId = defaultValue.substring(10);
-                if (scriptCallbackId.startsWith("LocalTunnel")) {
-                    if(message == null || message.length() == 0) {
-                        scriptResult = new PluginResult(PluginResult.Status.OK, new JSONArray());
-                    } else {
-                        try {
-                            scriptResult = new PluginResult(PluginResult.Status.OK, new JSONArray(message));
-                        } catch(JSONException e) {
-                            scriptResult = new PluginResult(PluginResult.Status.JSON_EXCEPTION, e.getMessage());
-                        }
+                JSONArray jsonMessage;
+
+                if(message == null || message.length() == 0) {
+                    jsonMessage = new JSONArray();
+                    scriptResult = new PluginResult(PluginResult.Status.OK, jsonMessage);
+                } else {
+                    try {
+                        jsonMessage = new JSONArray(message);
+                        scriptResult = new PluginResult(PluginResult.Status.OK, jsonMessage);
+                    } catch(JSONException e) {
+                        jsonMessage = new JSONArray();
+                        scriptResult = new PluginResult(PluginResult.Status.JSON_EXCEPTION, e.getMessage());
                     }
+                }
+
+                if (scriptCallbackId.startsWith("LocalTunnel")) {
                     this.webView.sendPluginResult(scriptResult, scriptCallbackId);
                     result.confirm("");
                     return true;
                 } else if (scriptCallbackId.startsWith("requestdone")) {
-                    this.iab.sendRequestDone();
+                    try {
+                        int status = jsonMessage.getInt(0);
+                        String statusText = jsonMessage.getString(1);
+                        this.iab.sendRequestDone(status, statusText);
+                    } catch (JSONException e) {
+                        LOG.w(LOG_TAG, e.getMessage());
+                    }
                     result.confirm("");
                     return true;
                 }
