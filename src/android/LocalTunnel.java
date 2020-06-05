@@ -1170,6 +1170,7 @@ public class LocalTunnel extends CordovaPlugin {
         final String requestOptionsJson = args.optString(3);
         final org.json.JSONObject requestOptions = new org.json.JSONObject(requestOptionsJson);
         final org.json.JSONObject requestParams = requestOptions.getJSONObject("params");
+        final org.json.JSONObject requestHeaders = requestOptions.getJSONObject("headers");
         final String requestCookies = requestOptions.getString("cookies");
         final String method = requestOptions.getString("method");
         final String userAgent = requestOptions.getString("useragent");
@@ -1276,8 +1277,40 @@ public class LocalTunnel extends CordovaPlugin {
                     dialog.getWindow().setAttributes(lp);
                 }
 
+                Boolean isContentJSON = null;
+                try {
+                    isContentJSON = requestHeaders.getString("Content-Type").equals("application/json");
+                } catch(JSONException ex) {
+                    isContentJSON = false;
+                }
+
                 if (method.equals("get")) {
                     localTunnelWebView.loadUrl(url);
+                } else if (method.equals("post") && isContentJSON) {
+                    String jsCode = String.format(
+                        "function reqListener() {" +
+                        "    window._HTML = '<html><body>' + this.responseText + '</body></html>';" +
+                        "    setTimeout(function() { prompt(JSON.stringify([null]), 'gap-iab://requestdone'); }, 100);" +
+                        "}" +
+                        "function reqError(err) {" +
+                        "    console.log('Fetch Error :-S', err);" +
+                        "}" +
+                        "var oReq = new XMLHttpRequest();" +
+                        "oReq.onload = reqListener;" +
+                        "oReq.onerror = reqError;" +
+                        "oReq.open('post', '%s');" +
+                        "oReq.setRequestHeader('Content-Type', 'application/json;charset=UTF-8');" +
+                        "oReq.send(JSON.stringify(%s));",
+                        url,
+                        requestParams.toString()
+                    );
+                    cordova.getActivity().runOnUiThread(new Runnable() {
+                        @SuppressLint("NewApi")
+                        @Override
+                        public void run() {
+                            localTunnelWebView.evaluateJavascript(jsCode, null);
+                        }
+                    });
                 } else if (method.equals("post")) {
                     List<String> postDataList = new ArrayList<String>();
                     Iterator<String> params = requestParams.keys();
@@ -1335,6 +1368,22 @@ public class LocalTunnel extends CordovaPlugin {
             if (!keepCallback) {
                 callbackContext = null;
             }
+        }
+    }
+
+    /**
+     * Send a requestdone result back to the app.
+     */
+    public void sendRequestDone() {
+        try {
+            org.json.JSONObject obj = new JSONObject();
+            obj.put("type", HTTP_REQUEST_DONE);
+            String cookies = CookieManager.getInstance().getCookie(requestUrl);
+            obj.put("cookies", cookies);
+            obj.put("url", requestUrl);
+            sendUpdate(obj, true);
+        } catch (JSONException ex) {
+            LOG.e(LOG_TAG, "Should never happen", ex);
         }
     }
 
@@ -1585,16 +1634,7 @@ public class LocalTunnel extends CordovaPlugin {
 
             LOG.d(LOG_TAG, "PAGE FINISHED: " + url);
             if (url.equals(requestUrl)) {
-                try {
-                    org.json.JSONObject obj = new JSONObject();
-                    obj.put("type", HTTP_REQUEST_DONE);
-                    String cookies = CookieManager.getInstance().getCookie(requestUrl);
-                    obj.put("cookies", cookies);
-                    obj.put("url", requestUrl);
-                    sendUpdate(obj, true);
-                } catch (JSONException ex) {
-                    LOG.e(LOG_TAG, "Should never happen", ex);
-                }
+                sendRequestDone();
                 requestUrl = null;
                 enableRequestBlocking = false;
             }
