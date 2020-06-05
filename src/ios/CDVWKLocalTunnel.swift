@@ -259,7 +259,6 @@ protocol WebViewPropagateDelegate {
             let currentURL = self.webViewController?.webView.url?.absoluteString
 
             self.webViewController?.getCookiesForUrl(currentURL ?? "", completionHandler: {cookies in
-                print("Cookies \(cookies)")
                 let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: [
                     "type": "requestdone",
                     "url": currentURL,
