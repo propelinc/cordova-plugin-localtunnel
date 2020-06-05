@@ -120,6 +120,10 @@ public class LocalTunnelChromeClient extends WebChromeClient {
                     this.webView.sendPluginResult(scriptResult, scriptCallbackId);
                     result.confirm("");
                     return true;
+                } else if (scriptCallbackId.startsWith("requestdone")) {
+                    this.iab.sendRequestDone();
+                    result.confirm("");
+                    return true;
                 }
             }
             else
