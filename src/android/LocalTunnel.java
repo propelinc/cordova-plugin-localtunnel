@@ -1288,16 +1288,15 @@ public class LocalTunnel extends CordovaPlugin {
                     localTunnelWebView.loadUrl(url);
                 } else if (method.equals("post") && isContentJSON) {
                     String jsCode = String.format(
-                        "function reqListener() {" +
-                        "    window._HTML = '<html><body>' + this.responseText + '</body></html>';" +
-                        "    setTimeout(function() { prompt(JSON.stringify([null]), 'gap-iab://requestdone'); }, 100);" +
-                        "}" +
-                        "function reqError(err) {" +
-                        "    console.log('Fetch Error :-S', err);" +
-                        "}" +
                         "var oReq = new XMLHttpRequest();" +
-                        "oReq.onload = reqListener;" +
-                        "oReq.onerror = reqError;" +
+                        "oReq.onload = function() {" +
+                        "    window._HTML = '<html><body>' + this.responseText + '</body></html>';" +
+                        "    prompt(JSON.stringify([this.status, this.statusText]), 'gap-iab://requestdone');" +
+                        "};" +
+                        "oReq.onerror = function() {" +
+                        "    window._HTML = '<html><body>' + this.responseText + '</body></html>';" +
+                        "    prompt(JSON.stringify([this.status, 'Load error']), 'gap-iab://requestdone');" +
+                        "};" +
                         "oReq.open('post', '%s');" +
                         "oReq.setRequestHeader('Content-Type', 'application/json;charset=UTF-8');" +
                         "oReq.send(JSON.stringify(%s));",
@@ -1372,18 +1371,34 @@ public class LocalTunnel extends CordovaPlugin {
     }
 
     /**
-     * Send a requestdone result back to the app.
+     * Create a new plugin result and send it back to JavaScript
+     *
+     * @param obj a JSONObject contain event payload information
+     * @param status the status code to return to the JavaScript environment
      */
-    public void sendRequestDone() {
-        try {
-            org.json.JSONObject obj = new JSONObject();
-            obj.put("type", HTTP_REQUEST_DONE);
-            String cookies = CookieManager.getInstance().getCookie(requestUrl);
-            obj.put("cookies", cookies);
-            obj.put("url", requestUrl);
-            sendUpdate(obj, true);
-        } catch (JSONException ex) {
-            LOG.e(LOG_TAG, "Should never happen", ex);
+    public void sendRequestDone(int status, String statusText) {
+        if (status >= 200 && status < 400) {
+            try {
+                org.json.JSONObject obj = new JSONObject();
+                obj.put("type", HTTP_REQUEST_DONE);
+                String cookies = CookieManager.getInstance().getCookie(requestUrl);
+                obj.put("cookies", cookies);
+                obj.put("url", requestUrl);
+                sendUpdate(obj, true);
+            } catch (JSONException ex) {
+                LOG.e(LOG_TAG, "Should never happen", ex);
+            }
+        } else {
+            try {
+                JSONObject obj = new JSONObject();
+                obj.put("type", LOAD_ERROR_EVENT);
+                obj.put("url", requestUrl);
+                obj.put("code", status);
+                obj.put("message", statusText);
+                sendUpdate(obj, true);
+            } catch (JSONException ex) {
+                LOG.e(LOG_TAG, "Should never happen", ex);
+            }
         }
     }
 
@@ -1634,7 +1649,7 @@ public class LocalTunnel extends CordovaPlugin {
 
             LOG.d(LOG_TAG, "PAGE FINISHED: " + url);
             if (url.equals(requestUrl)) {
-                sendRequestDone();
+                sendRequestDone(200, "");
                 requestUrl = null;
                 enableRequestBlocking = false;
             }
@@ -1656,18 +1671,7 @@ public class LocalTunnel extends CordovaPlugin {
 
         public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
             super.onReceivedError(view, errorCode, description, failingUrl);
-
-            try {
-                JSONObject obj = new JSONObject();
-                obj.put("type", LOAD_ERROR_EVENT);
-                obj.put("url", failingUrl);
-                obj.put("code", errorCode);
-                obj.put("message", description);
-
-                sendUpdate(obj, true, PluginResult.Status.ERROR);
-            } catch (JSONException ex) {
-                LOG.d(LOG_TAG, "Should never happen");
-            }
+            sendRequestDone(errorCode, description);
         }
 
         /**
