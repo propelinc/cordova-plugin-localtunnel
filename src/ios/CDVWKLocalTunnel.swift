@@ -31,6 +31,7 @@ let CAPTCHA_REQUEST = "_captcha"
 struct RequestOptions {
     var blockNonEssentialRequests: Bool
     var displayWebview: Bool
+    var isContentJSON: Bool
     var method: String
     var requestType: String
     var url: String
@@ -76,6 +77,10 @@ protocol WebViewPropagateDelegate {
 
     var openCallbackId: String?
 
+    var clearCookiesOnNextRequest = false
+
+    var webDriverSession = false
+
     func resetsState() {
         self.requestOptions = nil
 
@@ -100,6 +105,14 @@ protocol WebViewPropagateDelegate {
 
         print("Running open with \nrequest_options: \(self.requestOptions)")
 
+        // The javascript client expects that calling open(..., "_clearcookies") should
+        // clear the cookies synchronously. WKWebivew cannot clear cookies synchronously.
+        // To properly handle this, we synchronously set a variable. On the next request, we clear the cookies and cleanup the variable
+        if self.requestOptions?.requestType == CLEAR_COOKIES_REQUEST {
+            self.clearCookiesOnNextRequest = true
+            return
+        }
+
         let runOpen = {
             if self.requestOptions?.displayWebview ?? false {
                 self.showWebView()
@@ -107,18 +120,39 @@ protocol WebViewPropagateDelegate {
                 self.hideWebView()
             }
 
-            if self.requestOptions?.requestType == CLEAR_COOKIES_REQUEST {
-                // This deletes cookies asynchronously
-                self.webViewController?.clearCookies(completionHander: {
-                    let pluginResult = CDVPluginResult(status: CDVCommandStatus_OK)
-                    self.commandDelegate.send(pluginResult, callbackId: self.openCallbackId)
-                    self.destroyWebViewController()
-                })
-            } else if self.requestOptions?.requestType == HTTP_REQUEST {
-                var request = createRequest(urlString: self.requestOptions?.url ?? "", method: self.requestOptions?.method ?? "GET", params: self.requestOptions?.params)
-                self.webViewController?.urlSessionLoad(request, requestOptions: self.requestOptions)
-            } else if self.requestOptions?.requestType == CAPTCHA_REQUEST {
-                self.webViewController?.loadHTMLString(self.requestOptions?.captchaContentHtml ?? "", baseURL: URL(string: self.requestOptions?.url ?? ""))
+            let makeRequestsBlock = {
+                if self.requestOptions?.requestType == HTTP_REQUEST {
+                    var request: URLRequest
+                    if self.requestOptions?.method.lowercased() == "post" {
+                        let postType = self.requestOptions!.isContentJSON ? "json" : "form"
+                        request = createRequest(urlString: self.requestOptions!.url, method: self.requestOptions!.method, params: self.requestOptions!.params, postType: postType)
+                    } else {
+                        request = createRequest(urlString: self.requestOptions?.url ?? "", method: self.requestOptions?.method ?? "GET", params: self.requestOptions?.params)
+                    }
+                    // This implies we are webdriving code. We need to use normal loads
+                    // for the totality of requests made after web driving in order to
+                    // ensure that cookies are handled properly in the WKWebView
+                    if (self.requestOptions?.blockNonEssentialRequests == false) {
+                        self.webDriverSession = true
+                    }
+
+                    if self.webDriverSession {
+                        self.webViewController?.load(request)
+                    } else {
+                        self.webViewController?.urlSessionLoad(request, requestOptions: self.requestOptions)
+                    }
+                } else if self.requestOptions?.requestType == CAPTCHA_REQUEST {
+                    self.webViewController?.loadHTMLString(self.requestOptions?.captchaContentHtml ?? "", baseURL: URL(string: self.requestOptions?.url ?? ""))
+                }
+            }
+
+            if self.clearCookiesOnNextRequest {
+                self.clearCookiesOnNextRequest = false
+                self.webViewController?.clearCookies {
+                    makeRequestsBlock()
+                }
+            } else {
+                makeRequestsBlock()
             }
         }
 
@@ -138,6 +172,7 @@ protocol WebViewPropagateDelegate {
     }
 
     func destroyWebViewController() {
+        self.webDriverSession = false
         self.hideWebView()
         self.webViewController?.close()
     }
@@ -181,7 +216,13 @@ protocol WebViewPropagateDelegate {
 
         let passedMethod = passedOptions["method"] as? String ?? "GET"
 
-        var requestOptions = RequestOptions(blockNonEssentialRequests: passedBlock, displayWebview: displayWebview, method: passedMethod, requestType: requestType, url: url)
+        var isContentJSON = false
+        let passedHeaders = passedOptions["headers"] as? [String: String] ?? [:]
+        if passedHeaders["Content-Type"] == "application/json" {
+            isContentJSON = true
+        }
+
+        var requestOptions = RequestOptions(blockNonEssentialRequests: passedBlock, displayWebview: displayWebview, isContentJSON: isContentJSON, method: passedMethod, requestType: requestType, url: url)
 
         if passedOptions["content"] != nil {
             requestOptions.captchaContentHtml = passedOptions["content"] as? String ?? nil
@@ -232,7 +273,6 @@ protocol WebViewPropagateDelegate {
             let currentURL = self.webViewController?.webView.url?.absoluteString
 
             self.webViewController?.getCookiesForUrl(currentURL ?? "", completionHandler: {cookies in
-                print("Cookies \(cookies)")
                 let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: [
                     "type": "requestdone",
                     "url": currentURL,
@@ -442,6 +482,10 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
                 postDismiss()
             }
         }
+    }
+
+    func load(_ request: URLRequest) {
+        self.webView.load(request);
     }
 
     // WKWebview does not do a great job handling cookies
@@ -698,7 +742,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
-        print("in webViewDelegate:DecisionHandlerResponse \nnavigationResponse: \(navigationResponse)", navigationResponse)
+        print("in webViewDelegate:DecisionHandlerResponse \nnavigationResponse: \(navigationResponse)")
 
         let httpResponse = navigationResponse.response as! HTTPURLResponse
         self.finishedResponse = httpResponse
@@ -819,16 +863,24 @@ func convertStringToCookies(_ cookieString: String, host: String) -> [HTTPCookie
     }
 
     let hostParts = host.components(separatedBy: "www")
-    let domain = hostParts[1]
+    var domain: String
+    if hostParts.count == 2 {
+         domain = hostParts[1]
+    } else {
+        domain = host
+    }
 
     for cookiePair in cookieString.components(separatedBy: "; ") {
-        let subComponents = cookiePair.components(separatedBy: "=")
+        let equalsIndex = cookiePair.firstIndex(of: "=")!
+        let equalsIndexPlusOne = cookiePair.index(equalsIndex, offsetBy: 1)
+        let name = cookiePair[..<equalsIndex]
+        let value = cookiePair[equalsIndexPlusOne...]
 
         let cookie = HTTPCookie(properties: [
             HTTPCookiePropertyKey.domain: domain,
             HTTPCookiePropertyKey.path: "/",
-            HTTPCookiePropertyKey.name: subComponents[0],
-            HTTPCookiePropertyKey.value: subComponents[1],
+            HTTPCookiePropertyKey.name: name,
+            HTTPCookiePropertyKey.value: value,
         ])
         if cookie != nil {
             cookies.append(cookie!)
