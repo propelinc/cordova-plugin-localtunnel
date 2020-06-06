@@ -79,6 +79,8 @@ protocol WebViewPropagateDelegate {
 
     var clearCookiesOnNextRequest = false
 
+    var webDriverSession = false
+
     func resetsState() {
         self.requestOptions = nil
 
@@ -127,7 +129,18 @@ protocol WebViewPropagateDelegate {
                     } else {
                         request = createRequest(urlString: self.requestOptions?.url ?? "", method: self.requestOptions?.method ?? "GET", params: self.requestOptions?.params)
                     }
-                    self.webViewController?.urlSessionLoad(request, requestOptions: self.requestOptions)
+                    // This implies we are webdriving code. We need to use normal loads
+                    // for the totality of requests made after web driving in order to
+                    // ensure that cookies are handled properly in the WKWebView
+                    if (self.requestOptions?.blockNonEssentialRequests == false) {
+                        self.webDriverSession = true
+                    }
+
+                    if self.webDriverSession {
+                        self.webViewController?.load(request)
+                    } else {
+                        self.webViewController?.urlSessionLoad(request, requestOptions: self.requestOptions)
+                    }
                 } else if self.requestOptions?.requestType == CAPTCHA_REQUEST {
                     self.webViewController?.loadHTMLString(self.requestOptions?.captchaContentHtml ?? "", baseURL: URL(string: self.requestOptions?.url ?? ""))
                 }
@@ -159,6 +172,7 @@ protocol WebViewPropagateDelegate {
     }
 
     func destroyWebViewController() {
+        self.webDriverSession = false
         self.hideWebView()
         self.webViewController?.close()
     }
@@ -470,6 +484,10 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
         }
     }
 
+    func load(_ request: URLRequest) {
+        self.webView.load(request);
+    }
+
     // WKWebview does not do a great job handling cookies
     //  * It does not set cookies on redirect
     //  * It does not always propagate the document.cookie object up to HTTPCookieStore
@@ -724,7 +742,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
-        print("in webViewDelegate:DecisionHandlerResponse \nnavigationResponse: \(navigationResponse)", navigationResponse)
+        print("in webViewDelegate:DecisionHandlerResponse \nnavigationResponse: \(navigationResponse)")
 
         let httpResponse = navigationResponse.response as! HTTPURLResponse
         self.finishedResponse = httpResponse
