@@ -102,18 +102,6 @@ protocol WebViewPropagateDelegate {
         self.resetState()
         self.requestOptions = self.createRequestOptions(command: command)
 
-        self.webViewController?.webConfiguration.userContentController.removeAllContentRuleLists()
-        if (self.requestOptions?.blockNonEssentialRequests == true) {
-            print("*** Block non essential requests")
-            WKContentRuleListStore.default()?.compileContentRuleList(forIdentifier: "block_rules", encodedContentRuleList:self.webViewController?.blockRules , completionHandler: {contentRuleList, error in
-                if contentRuleList != nil {
-                    self.webViewController?.webConfiguration.userContentController.add(contentRuleList!)
-                }
-            })
-        } else {
-            print("*** Allow non essential requests")
-        }
-
         self.openCallbackId = command.callbackId;
 
         print("Running open with \nrequest_options: \(self.requestOptions)")
@@ -127,6 +115,10 @@ protocol WebViewPropagateDelegate {
         }
 
         let runOpen = {
+            if self.requestOptions?.userAgent != nil {
+                self.webViewController?.webView.customUserAgent = self.requestOptions?.userAgent
+            }
+
             if self.requestOptions?.displayWebview ?? false {
                 self.showWebView()
             } else {
@@ -169,13 +161,21 @@ protocol WebViewPropagateDelegate {
             }
         }
 
-        if self.webViewController == nil  && self.requestOptions != nil{
-            self.webViewController = WebViewViewController()
-            self.webViewController?.propagateDelegate = self;
-            self.webViewController?.createWebView(self.requestOptions!, completionHander: runOpen)
-        } else {
-            runOpen()
-        }
+        let rules = self.requestOptions?.blockNonEssentialRequests == true ? self.webViewController?.blockRules : "[]"
+        WKContentRuleListStore.default()?.compileContentRuleList(forIdentifier: "block_rules", encodedContentRuleList:rules , completionHandler: {contentRuleList, error in
+            self.webViewController?.webConfiguration.userContentController.removeAllContentRuleLists()
+            if contentRuleList != nil {
+                self.webViewController?.webConfiguration.userContentController.add(contentRuleList!)
+            }
+
+            if self.webViewController == nil  && self.requestOptions != nil{
+                self.webViewController = WebViewViewController()
+                self.webViewController?.propagateDelegate = self;
+                self.webViewController?.createWebView(self.requestOptions!, completionHander: runOpen)
+            } else {
+                runOpen()
+            }
+        })
     }
 
     @objc(close:)
@@ -448,10 +448,6 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
         self.webView.navigationDelegate = self
 
         self.view.addSubview(self.webView)
-
-        if requestOptions.userAgent != nil {
-            self.webView.customUserAgent = requestOptions.userAgent
-        }
 
         // Copied from inappbrowser
         // https://github.com/apache/cordova-plugin-inappbrowser/blob/3.2.x/src/ios/CDVWKInAppBrowser.m#L789
