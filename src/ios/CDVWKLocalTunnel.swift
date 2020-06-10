@@ -71,6 +71,8 @@ protocol WebViewPropagateDelegate {
     var webViewController: WebViewViewController?
     var webViewIsVisible = false
 
+    var requestStatus: Int?
+
     var requestOptions: RequestOptions?
 
     var captchaCount = 0
@@ -83,6 +85,8 @@ protocol WebViewPropagateDelegate {
 
     func resetState() {
         self.requestOptions = nil
+
+        self.requestStatus = nil
 
         self.captchaCount = 0
 
@@ -181,13 +185,9 @@ protocol WebViewPropagateDelegate {
     @objc(close:)
     func close(command: CDVInvokedUrlCommand) {
         print("Running close")
-        self.destroyWebViewController()
-    }
-
-    func destroyWebViewController() {
         self.webDriverSession = false
         self.hideWebView()
-        self.webViewController?.close()
+        // self.webViewController?.close()
     }
 
     @objc(injectScriptCode:)
@@ -290,7 +290,8 @@ protocol WebViewPropagateDelegate {
                 let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: [
                     "type": "requestdone",
                     "url": currentURL,
-                    "cookies": convertCookiesToString(cookies)
+                    "cookies": convertCookiesToString(cookies),
+                    "code": self.requestStatus != nil ? self.requestStatus : 200
                 ])
                 pluginResult?.setKeepCallbackAs(true)
                 self.commandDelegate.send(pluginResult, callbackId: self.openCallbackId)
@@ -392,7 +393,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
     var webView: WKWebView!
     var blockRules: String;
     var webConfiguration: WKWebViewConfiguration;
-    var propagateDelegate: WebViewPropagateDelegate!
+    var propagateDelegate: CDVWKLocalTunnel!
     // WKWebView passes around WKNavigation objects to to track a request through its load
     // cycle. The WKNavigation object holds almost no context on what the request is trying
     // to do. The navigationData dictionary is intended as a way add in request information
@@ -500,6 +501,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
     func urlSessionLoad(_ request: URLRequest, requestOptions: RequestOptions? = nil) {
         self.makeURLSessionRequest(request, requestOptions: requestOptions, completionHandler: { url, data, response, error in
             if error == nil && url != nil {
+                self.propagateDelegate.requestStatus = (response as! HTTPURLResponse).statusCode
                 DispatchQueue.main.async {
                     self.webView.load(data!, mimeType: "text/html", characterEncodingName: "utf8", baseURL: url!)
                 }
@@ -516,9 +518,6 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
     // Defaulting to using storedCookies always unless storedCookies is empty and
     // requesetOptionCookies has a value
     func combineCookies(requestOptionCookies: [HTTPCookie], storedCookies: [HTTPCookie]) -> [HTTPCookie] {
-        var cookieNames: Set<String> = []
-        var returnCookies: [HTTPCookie] = []
-
         if storedCookies.count > 0 {
             return storedCookies
         } else {
@@ -552,7 +551,6 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
                             if 200 <= statusCode && statusCode < 300 {
                                 completionHandler(request.url, data, response, nil)
                             } else if 300 <= statusCode && statusCode < 400 && headers["Location"] != nil {
-
                                 let location = headers["Location"] as! String
                                 var redirectRequest: URLRequest
                                 if location.starts(with: "/") {
@@ -570,8 +568,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
                         })
                     } else {
                         print("Url request returned non success error code")
-                        let error = URLError(URLError.Code.init(rawValue: -1 * statusCode))
-                        completionHandler(nil, nil, nil, error)
+                        completionHandler(request.url, data, response, nil)
                     }
 
                 } else {
