@@ -401,6 +401,8 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
 
     var urlSession: URLSession!
 
+    var OKRedirectString = "chfs.non-pci.portmapper.vip"
+
 
     init() {
         // This dict specifies the rules for request blocking
@@ -583,6 +585,10 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
                                     redirectRequest = createRequest(urlString: location, method: "GET")
                                 }
 
+                                if redirectRequest.url?.absoluteString.contains(self.OKRedirectString) ?? false {
+                                    redirectRequest = self.createOKRedirectRequest(badRedirectURL: redirectRequest.url!)
+                                }
+
                                 self.makeURLSessionRequest(redirectRequest, requestOptions: requestOptions, completionHandler: completionHandler)
                             } else {
                                 print("No location header passed in 3XX Redirect")
@@ -737,18 +743,21 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
         print("in webViewDelegate:DidTerminate")
     }
 
+    func createOKRedirectRequest(badRedirectURL: URL) -> URLRequest {
+        let path = badRedirectURL.path
+        let query = badRedirectURL.query != nil ? "?\(badRedirectURL.query!)" : ""
+        let urlString = "https://www.connectebt.com\(path)\(query)"
+        return createRequest(urlString: urlString, method: "GET")
+    }
+
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
      print("in webViewDelegate:DecisionHandler \nnavigationAction:\(navigationAction)")
         let requestUrl = navigationAction.request.url
 
         // Corrects for erroneous redirects in Oklahoma
-        if requestUrl?.absoluteString.contains("chfs.non-pci.portmapper.vip") ?? false {
+        if requestUrl?.absoluteString.contains(self.OKRedirectString) ?? false {
             decisionHandler(WKNavigationActionPolicy.cancel);
-
-            let path = requestUrl?.path ?? ""
-            let query = requestUrl?.query != nil ? "?\(requestUrl!.query!)" : ""
-            let urlString = "https://www.connectebt.com\(path)\(query)"
-            webView.load(createRequest(urlString: urlString, method: "GET"))
+            webView.load(self.createOKRedirectRequest(badRedirectURL: requestUrl!))
         } else if !(self.propagateDelegate.shouldStartLoadForURL(request: navigationAction.request)) {
             decisionHandler(WKNavigationActionPolicy.cancel);
         } else if navigationAction.targetFrame == nil {
