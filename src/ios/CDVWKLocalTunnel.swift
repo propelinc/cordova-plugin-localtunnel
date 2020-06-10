@@ -47,6 +47,8 @@ struct RequestOptions {
     with the CDVWKLocalTunnel class
 */
 protocol WebViewPropagateDelegate {
+    var requestStatus: Int? {get set}
+
     func requestDidSucceed(request: URLRequest?,  response: HTTPURLResponse?)
     func requestDidFail(request: URLRequest?,  error: URLError)
     func shouldStartLoadForURL(request: URLRequest) -> Bool
@@ -71,6 +73,8 @@ protocol WebViewPropagateDelegate {
     var webViewController: WebViewViewController?
     var webViewIsVisible = false
 
+    var requestStatus: Int?
+
     var requestOptions: RequestOptions?
 
     var captchaCount = 0
@@ -81,7 +85,9 @@ protocol WebViewPropagateDelegate {
 
     var webDriverSession = false
 
-    func resetsState() {
+    func resetState() {
+        self.requestStatus = nil
+
         self.requestOptions = nil
 
         self.captchaCount = 0
@@ -99,7 +105,7 @@ protocol WebViewPropagateDelegate {
     */
     @objc(open:)
     func open(command: CDVInvokedUrlCommand) {
-        self.resetsState()
+        self.resetState()
         self.requestOptions = self.createRequestOptions(command: command)
         self.openCallbackId = command.callbackId;
 
@@ -160,8 +166,8 @@ protocol WebViewPropagateDelegate {
             self.webViewController = WebViewViewController()
             self.webViewController?.propagateDelegate = self;
             self.webViewController?.createWebView(self.requestOptions!, completionHander: runOpen)
-        } else {
-            runOpen()
+        } else if self.requestOptions != nil {
+            self.webViewController?.updateWebView(self.requestOptions!, completionHandler: runOpen)
         }
     }
 
@@ -274,9 +280,10 @@ protocol WebViewPropagateDelegate {
 
             self.webViewController?.getCookiesForUrl(currentURL ?? "", completionHandler: {cookies in
                 let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: [
+                    "code": self.requestStatus ?? 200,
+                    "cookies": convertCookiesToString(cookies),
                     "type": "requestdone",
                     "url": currentURL,
-                    "cookies": convertCookiesToString(cookies)
                 ])
                 pluginResult?.setKeepCallbackAs(true)
                 self.commandDelegate.send(pluginResult, callbackId: self.openCallbackId)
@@ -468,6 +475,21 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
         }
     }
 
+    func updateWebView(_ requestOptions: RequestOptions, completionHandler: @escaping () -> Void) {
+        self.webView.customUserAgent = requestOptions.userAgent
+
+        let rules = requestOptions.blockNonEssentialRequests == true ? self.blockRules : "[]"
+        WKContentRuleListStore.default()?.compileContentRuleList(forIdentifier: "block_rules", encodedContentRuleList:rules, completionHandler: {contentRuleList, error in
+
+            self.webView.configuration.userContentController.removeAllContentRuleLists()
+
+            if contentRuleList != nil {
+                self.webView.configuration.userContentController.add(contentRuleList!)
+            }
+            completionHandler()
+        })
+    }
+
     func close() {
         let postDismiss = {
             self.propagateDelegate.webViewControllerDidClose()
@@ -498,7 +520,8 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
     // loading all requests itself.
     func urlSessionLoad(_ request: URLRequest, requestOptions: RequestOptions? = nil) {
         self.makeURLSessionRequest(request, requestOptions: requestOptions, completionHandler: { url, data, response, error in
-            if error == nil && url != nil {
+            if error == nil && url != nil && response != nil {
+                self.propagateDelegate.requestStatus = response!.statusCode
                 DispatchQueue.main.async {
                     self.webView.load(data!, mimeType: "text/html", characterEncodingName: "utf8", baseURL: url!)
                 }
@@ -525,7 +548,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
         }
     }
 
-    func makeURLSessionRequest(_ passedRequest: URLRequest, requestOptions: RequestOptions?, completionHandler: @escaping (URL?, Data?, URLResponse?, URLError?) -> Void) {
+    func makeURLSessionRequest(_ passedRequest: URLRequest, requestOptions: RequestOptions?, completionHandler: @escaping (URL?, Data?, HTTPURLResponse?, URLError?) -> Void) {
         print("Making request to \(passedRequest.url)")
 
         self.getCookiesForUrl(passedRequest.url?.absoluteString ?? "", completionHandler: {storedCookies in
@@ -549,7 +572,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
                             print("Set cookies from URL response \(returnedCookies) \(response)")
 
                             if 200 <= statusCode && statusCode < 300 {
-                                completionHandler(request.url, data, response, nil)
+                                completionHandler(request.url, data, response as? HTTPURLResponse ?? nil, nil)
                             } else if 300 <= statusCode && statusCode < 400 && headers["Location"] != nil {
 
                                 let location = headers["Location"] as! String
@@ -569,8 +592,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
                         })
                     } else {
                         print("Url request returned non success error code")
-                        let error = URLError(URLError.Code.init(rawValue: -1 * statusCode))
-                        completionHandler(nil, nil, nil, error)
+                        completionHandler(request.url, data, response as? HTTPURLResponse ?? nil, nil)
                     }
 
                 } else {
