@@ -81,7 +81,7 @@ protocol WebViewPropagateDelegate {
 
     var webDriverSession = false
 
-    func resetsState() {
+    func resetState() {
         self.requestOptions = nil
 
         self.captchaCount = 0
@@ -99,8 +99,21 @@ protocol WebViewPropagateDelegate {
     */
     @objc(open:)
     func open(command: CDVInvokedUrlCommand) {
-        self.resetsState()
+        self.resetState()
         self.requestOptions = self.createRequestOptions(command: command)
+
+        self.webViewController?.webConfiguration.userContentController.removeAllContentRuleLists()
+        if (self.requestOptions?.blockNonEssentialRequests == true) {
+            print("*** Block non essential requests")
+            WKContentRuleListStore.default()?.compileContentRuleList(forIdentifier: "block_rules", encodedContentRuleList:self.webViewController?.blockRules , completionHandler: {contentRuleList, error in
+                if contentRuleList != nil {
+                    self.webViewController?.webConfiguration.userContentController.add(contentRuleList!)
+                }
+            })
+        } else {
+            print("*** Allow non essential requests")
+        }
+
         self.openCallbackId = command.callbackId;
 
         print("Running open with \nrequest_options: \(self.requestOptions)")
@@ -188,6 +201,7 @@ protocol WebViewPropagateDelegate {
                 let jsResponse = returnVal as? String ?? ""
                 let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: [jsResponse])
                 pluginResult?.setKeepCallbackAs(true)
+                print("Result: \(jsResponse)")
                 self.commandDelegate.send(pluginResult, callbackId: command.callbackId)
             } else {
                 print("Ran into an issue running javascript: \(error!)")
@@ -256,7 +270,7 @@ protocol WebViewPropagateDelegate {
     }
 
     func hideWebView() {
-        if self.webViewIsVisible && self.webViewController != nil{
+        if self.webViewIsVisible && self.webViewController != nil {
             self.webViewIsVisible = false
             self.webViewController!.dismiss(animated: false)
         } else {
@@ -377,6 +391,7 @@ struct NavigationData {
 class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigationDelegate, WKUIDelegate {
     var webView: WKWebView!
     var blockRules: String;
+    var webConfiguration: WKWebViewConfiguration;
     var propagateDelegate: WebViewPropagateDelegate!
     // WKWebView passes around WKNavigation objects to to track a request through its load
     // cycle. The WKNavigation object holds almost no context on what the request is trying
@@ -412,6 +427,8 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
             ],
         ]
         self.blockRules = jsonDumps(blockRulesDict) ?? "[]"
+
+        self.webConfiguration = WKWebViewConfiguration()
 
         super.init(nibName:nil, bundle: nil)
 
@@ -453,19 +470,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
     }
 
     func createWebView(_ requestOptions: RequestOptions, completionHander: @escaping () -> Void) {
-        let webConfiguration = WKWebViewConfiguration()
-
-        if (requestOptions.blockNonEssentialRequests) {
-            WKContentRuleListStore.default()?.compileContentRuleList(forIdentifier: "block_rules", encodedContentRuleList:self.blockRules , completionHandler: {contentRuleList, error in
-                if contentRuleList != nil {
-                    webConfiguration.userContentController.add(contentRuleList!)
-                }
-                self.createWebViewWithConfiguration(requestOptions, webConfiguration, completionHander)
-            })
-
-        } else {
-            self.createWebViewWithConfiguration(requestOptions, webConfiguration, completionHander)
-        }
+        self.createWebViewWithConfiguration(requestOptions, self.webConfiguration, completionHander)
     }
 
     func close() {
