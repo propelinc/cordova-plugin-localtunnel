@@ -921,6 +921,10 @@ func convertStringToCookies(_ cookieString: String, host: String) -> [HTTPCookie
     return cookies
 }
 
+// BaseURLs are important because of how webView.load(data, ...
+// and webView.loadHTMLString(... work. Both require that the URL argument
+// is a base url that helps resolve relative URLs in the html body.
+// https://developer.apple.com/documentation/webkit/wkwebview/1415011-load
 func createBaseURL(_ url: URL) -> URL {
     let urlString = url.absoluteString
     let parts = urlString.components(separatedBy: "://")
