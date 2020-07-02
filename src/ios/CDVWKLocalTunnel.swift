@@ -148,7 +148,7 @@ protocol WebViewPropagateDelegate {
                         self.webViewController?.urlSessionLoad(request, requestOptions: self.requestOptions)
                     }
                 } else if self.requestOptions?.requestType == CAPTCHA_REQUEST {
-                    self.webViewController?.loadHTMLString(self.requestOptions?.captchaContentHtml ?? "", baseURL: URL(string: self.requestOptions?.url ?? ""))
+                    self.webViewController?.loadHTMLString(self.requestOptions?.captchaContentHtml ?? "", baseURL: createBaseURL(URL(string: self.requestOptions?.url ?? "")!))
                 }
             }
 
@@ -525,7 +525,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
             if error == nil && url != nil && response != nil {
                 self.propagateDelegate.requestStatus = response!.statusCode
                 DispatchQueue.main.async {
-                    self.webView.load(data!, mimeType: "text/html", characterEncodingName: "utf8", baseURL: url!)
+                    self.webView.load(data!, mimeType: "text/html", characterEncodingName: "utf8", baseURL: createBaseURL(url!))
                 }
             } else if error != nil {
                 self.propagateDelegate.requestDidFail(request: request, error: error!)
@@ -919,6 +919,17 @@ func convertStringToCookies(_ cookieString: String, host: String) -> [HTTPCookie
     }
 
     return cookies
+}
+
+// BaseURLs are important because of how webView.load(data, ...
+// and webView.loadHTMLString(... work. Both require that the URL argument
+// is a base url that helps resolve relative URLs in the html body.
+// https://developer.apple.com/documentation/webkit/wkwebview/1415011-load
+func createBaseURL(_ url: URL) -> URL {
+    let urlString = url.absoluteString
+    let parts = urlString.components(separatedBy: "://")
+    let hostname = parts[1].split(separator: "/")[0]
+    return URL(string: "\(parts[0])://\(hostname)")!
 }
 
 //////////////////////////////////////////
