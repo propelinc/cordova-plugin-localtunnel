@@ -40,13 +40,13 @@
         </js-module>
         <config-file target="res/xml/config.xml" parent="/*">
             <feature name="LocalTunnel">
-                <param name="android-package" value="org.apache.cordova.localtunnel.LocalTunnel"/>
+                <param name="android-package" value="com.propel.localtunnel.LocalTunnel"/>
             </feature>
         </config-file>
 
-        <source-file src="src/android/LocalTunnel.java" target-dir="src/org/apache/cordova/localtunnel" />
-        <source-file src="src/android/LocalTunnelDialog.java" target-dir="src/org/apache/cordova/localtunnel" />
-        <source-file src="src/android/LocalTunnelChromeClient.java" target-dir="src/org/apache/cordova/localtunnel" />
+        <source-file src="src/android/LocalTunnel.kt" target-dir="src/org/apache/cordova/localtunnel" />
+        <source-file src="src/android/LocalTunnelDialog.kt" target-dir="src/org/apache/cordova/localtunnel" />
+        <source-file src="src/android/LocalTunnelChromeClient.kt" target-dir="src/org/apache/cordova/localtunnel" />
 
         <!--  drawable src/android/resources -->
         <resource-file src="src/android/res/drawable-hdpi/ic_action_next_item.png" target="res/drawable-hdpi/ic_action_next_item.png" />
