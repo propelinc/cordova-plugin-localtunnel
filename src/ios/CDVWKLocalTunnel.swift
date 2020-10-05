@@ -579,8 +579,8 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
 
                                 let location = headers["Location"] as! String
                                 var redirectRequest: URLRequest
-                                if location.starts(with: "/") {
-                                    redirectRequest = createRequest(urlString: "\(request.url?.host)\(location)", method: "GET")
+                                if location.starts(with: "/") && request.url?.host != nil {
+                                    redirectRequest = createRequest(urlString: "https://\(request.url!.host!)\(location)", method: "GET")
                                 } else {
                                     redirectRequest = createRequest(urlString: location, method: "GET")
                                 }
