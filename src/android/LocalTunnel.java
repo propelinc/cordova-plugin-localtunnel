@@ -1287,10 +1287,14 @@ public class LocalTunnel extends CordovaPlugin {
 
                 StringBuilder headersBuilder = new StringBuilder();
                 Iterator<String> keys = requestHeaders.keys();
-                while (keys.hasNext()) {
-                    String key = keys.next();
-                    String value = requestHeaders.getString(key);
-                    headersBuilder.append("oReq.setRequestHeader('" + key + "', '" + value + "');\n");
+                try {
+                    while (keys.hasNext()) {
+                        String key = keys.next();
+                        String value = requestHeaders.getString(key);
+                        headersBuilder.append("oReq.setRequestHeader('" + key + "', '" + value + "');\n");
+                    }
+                } catch (JSONException ex) {
+                    LOG.e(LOG_TAG, "Should never happen", ex);
                 }
 
                 if (method.equals("get")) {
