@@ -1289,8 +1289,8 @@ public class LocalTunnel extends CordovaPlugin {
                 Iterator<String> keys = requestHeaders.keys();
                 while (keys.hasNext()) {
                     String key = keys.next();
-                    String v = requestHeaders.getString(k);
-                    headersBuilder.append("oReq.setRequestHeader('" + k + "', '" + v + "');\n");
+                    String value = requestHeaders.getString(key);
+                    headersBuilder.append("oReq.setRequestHeader('" + key + "', '" + value + "');\n");
                 }
 
                 if (method.equals("get")) {
