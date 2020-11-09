@@ -33,6 +33,7 @@ struct RequestOptions {
     var displayWebview: Bool
     var isContentJSON: Bool
     var method: String
+    var headers: [String: String]
     var requestType: String
     var url: String
 
@@ -131,10 +132,11 @@ protocol WebViewPropagateDelegate {
                     var request: URLRequest
                     if self.requestOptions?.method.lowercased() == "post" {
                         let postType = self.requestOptions!.isContentJSON ? "json" : "form"
-                        request = createRequest(urlString: self.requestOptions!.url, method: self.requestOptions!.method, params: self.requestOptions!.params, postType: postType)
+                        request = createRequest(urlString: self.requestOptions!.url, method: self.requestOptions!.method, params: self.requestOptions!.params, headers: self.requestOptions!.headers, postType: postType)
                     } else {
-                        request = createRequest(urlString: self.requestOptions?.url ?? "", method: self.requestOptions?.method ?? "GET", params: self.requestOptions?.params)
+                        request = createRequest(urlString: self.requestOptions?.url ?? "", method: self.requestOptions?.method ?? "GET", params: self.requestOptions?.params, headers: self.requestOptions!.headers)
                     }
+
                     // This implies we are webdriving code. We need to use normal loads
                     // for the totality of requests made after web driving in order to
                     // ensure that cookies are handled properly in the WKWebView
@@ -228,7 +230,21 @@ protocol WebViewPropagateDelegate {
             isContentJSON = true
         }
 
-        var requestOptions = RequestOptions(blockNonEssentialRequests: passedBlock, displayWebview: displayWebview, isContentJSON: isContentJSON, method: passedMethod, requestType: requestType, url: url)
+        var requestOptionsHeaders: [String: String] = [:]
+        for (k, v) in passedHeaders {
+            if !["Content-Type", "Cookie", "Referrer", "User-Agent"].contains(k) {
+                requestOptionsHeaders[k] = v
+            }
+        }
+
+        var requestOptions = RequestOptions(
+            blockNonEssentialRequests: passedBlock,
+            displayWebview: displayWebview,
+            isContentJSON: isContentJSON,
+            method: passedMethod,
+            headers: requestOptionsHeaders,
+            requestType: requestType,
+            url: url)
 
         if passedOptions["content"] != nil {
             requestOptions.captchaContentHtml = passedOptions["content"] as? String ?? nil
@@ -843,7 +859,13 @@ func convertToJSONData(_ params: Any) -> Data? {
     }
 }
 
-func createRequest(urlString: String, method: String, params: [String: Any]? = nil, postType: String = "form") -> URLRequest {
+func addRequestHeaders(_ request: inout URLRequest, _ headers: [String: String]) {
+    for (k, v) in headers {
+        request.addValue(v, forHTTPHeaderField: k)
+    }
+}
+
+func createRequest(urlString: String, method: String, params: [String: Any]? = nil, headers: [String: String]? = nil, postType: String = "form") -> URLRequest {
     if method.lowercased() == "post" {
         let url = URL(string: urlString)!
         var request = URLRequest(url: url)
@@ -860,6 +882,7 @@ func createRequest(urlString: String, method: String, params: [String: Any]? = n
                 request.httpBody = convertToJSONData(params!)
             }
         }
+        addRequestHeaders(&request, headers ?? [:])
         return request
     } else {
         var finalUrlString = urlString
@@ -870,6 +893,7 @@ func createRequest(urlString: String, method: String, params: [String: Any]? = n
         let url = URL(string: finalUrlString)!
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        addRequestHeaders(&request, headers ?? [:])
         return request
     }
 }

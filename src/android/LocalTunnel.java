@@ -1279,9 +1279,22 @@ public class LocalTunnel extends CordovaPlugin {
 
                 Boolean isContentJSON = null;
                 try {
+                    // TODO(ram): check substring instead of equals
                     isContentJSON = requestHeaders.getString("Content-Type").equals("application/json");
                 } catch(JSONException ex) {
                     isContentJSON = false;
+                }
+
+                StringBuilder headersBuilder = new StringBuilder();
+                Iterator<String> keys = requestHeaders.keys();
+                try {
+                    while (keys.hasNext()) {
+                        String key = keys.next();
+                        String value = requestHeaders.getString(key);
+                        headersBuilder.append("oReq.setRequestHeader('" + key + "', '" + value + "');\n");
+                    }
+                } catch (JSONException ex) {
+                    LOG.e(LOG_TAG, "Should never happen", ex);
                 }
 
                 if (method.equals("get")) {
@@ -1298,7 +1311,7 @@ public class LocalTunnel extends CordovaPlugin {
                         "    prompt(JSON.stringify([this.status, 'Load error']), 'gap-iab://requestdone');" +
                         "};" +
                         "oReq.open('post', '%s');" +
-                        "oReq.setRequestHeader('Content-Type', 'application/json;charset=UTF-8');" +
+                        headersBuilder.toString() + 
                         "oReq.send(JSON.stringify(%s));",
                         url,
                         requestParams.toString()
