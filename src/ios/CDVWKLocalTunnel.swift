@@ -228,7 +228,14 @@ protocol WebViewPropagateDelegate {
             isContentJSON = true
         }
 
-        var requestOptions = RequestOptions(blockNonEssentialRequests: passedBlock, displayWebview: displayWebview, isContentJSON: isContentJSON, method: passedMethod, requestType: requestType, url: url)
+        var requestOptions = RequestOptions(
+            blockNonEssentialRequests: passedBlock,
+            displayWebview: displayWebview,
+            isContentJSON: isContentJSON,
+            method: passedMethod,
+            headers: passedHeaders,
+            requestType: requestType,
+            url: url)
 
         if passedOptions["content"] != nil {
             requestOptions.captchaContentHtml = passedOptions["content"] as? String ?? nil
