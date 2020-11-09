@@ -1311,7 +1311,6 @@ public class LocalTunnel extends CordovaPlugin {
                         "    prompt(JSON.stringify([this.status, 'Load error']), 'gap-iab://requestdone');" +
                         "};" +
                         "oReq.open('post', '%s');" +
-                        // "oReq.setRequestHeader('Content-Type', 'application/json;charset=UTF-8');" +
                         headersBuilder.toString() + 
                         "oReq.send(JSON.stringify(%s));",
                         url,
