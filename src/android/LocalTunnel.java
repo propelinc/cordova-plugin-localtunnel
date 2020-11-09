@@ -1299,6 +1299,7 @@ public class LocalTunnel extends CordovaPlugin {
                         "};" +
                         "oReq.open('post', '%s');" +
                         "oReq.setRequestHeader('Content-Type', 'application/json;charset=UTF-8');" +
+                        "oReq.setRequestHeader('X-SunGard-IdP-API-Key', 'SunGard-IdP-Login');" +
                         "oReq.send(JSON.stringify(%s));",
                         url,
                         requestParams.toString()
