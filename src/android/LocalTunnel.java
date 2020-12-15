@@ -1397,6 +1397,7 @@ public class LocalTunnel extends CordovaPlugin {
                 String cookies = CookieManager.getInstance().getCookie(requestUrl);
                 obj.put("cookies", cookies);
                 obj.put("url", requestUrl);
+                obj.put("status", status);
                 sendUpdate(obj, true);
             } catch (JSONException ex) {
                 LOG.e(LOG_TAG, "Should never happen", ex);
