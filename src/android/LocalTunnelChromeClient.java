@@ -123,6 +123,8 @@ public class LocalTunnelChromeClient extends WebChromeClient {
                 }
 
                 if (scriptCallbackId.startsWith("LocalTunnel")) {
+                    LOG.d(LOG_TAG, "Handling LocalTunnel");
+
                     this.webView.sendPluginResult(scriptResult, scriptCallbackId);
                     result.confirm("");
                     return true;
@@ -130,6 +132,9 @@ public class LocalTunnelChromeClient extends WebChromeClient {
                     try {
                         int status = jsonMessage.getInt(0);
                         String statusText = jsonMessage.getString(1);
+
+                        LOG.d(LOG_TAG, "Handling requestdone. status: " + status + ". statusText: " + statusText);
+
                         this.iab.sendRequestDone(status, statusText);
                     } catch (JSONException e) {
                         LOG.w(LOG_TAG, e.getMessage());

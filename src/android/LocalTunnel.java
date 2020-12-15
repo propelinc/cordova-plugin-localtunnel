@@ -618,6 +618,8 @@ public class LocalTunnel extends CordovaPlugin {
         lastRequestUrl = null;
         enableRequestBlocking = false;
 
+        LOG.d(LOG_TAG, "showWebPage called: " + url);
+
         if (features != null) {
             String show = features.get(LOCATION);
             if (show != null) {
@@ -1183,6 +1185,8 @@ public class LocalTunnel extends CordovaPlugin {
         openWindowHidden = true;
         enableRequestBlocking = requestOptions.getBoolean("enable_request_blocking");
 
+        LOG.d(LOG_TAG, "makeHttpRequest called: " + url + ", enableRequestBlocking: " + enableRequestBlocking);
+
         if (features != null) {
             String hidden = features.get(HIDDEN);
             if (hidden != null && hidden.equals("no")) {
@@ -1390,6 +1394,8 @@ public class LocalTunnel extends CordovaPlugin {
      * @param status the status code to return to the JavaScript environment
      */
     public void sendRequestDone(int status, String statusText) {
+        LOG.d(LOG_TAG, "sendRequestDone called. status: " + status + ". statusText: " + statusText);
+
         if (status >= 100 && status < 600) {
             try {
                 org.json.JSONObject obj = new JSONObject();
@@ -1480,6 +1486,8 @@ public class LocalTunnel extends CordovaPlugin {
          */
         @Override
         public WebResourceResponse shouldInterceptRequest (final WebView webView, String url) {
+            LOG.d(LOG_TAG, "INSPECTING REQUEST in shouldInterceptRequest(). requestUrl: " + requestUrl + ". url: " + url + ". enableRequestBlocking: " + enableRequestBlocking);
+
             try {
                 if (enableRequestBlocking && !requestUrl.equals(url)) {
                     LOG.d(LOG_TAG, "REQUEST BLOCKED: " + url);
@@ -1688,6 +1696,8 @@ public class LocalTunnel extends CordovaPlugin {
         }
 
         public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+            LOG.d(LOG_TAG, "RECEIVED ERROR. errorCode: " + errorCode + ". description: " + description + ". failingUrl: " + failingUrl);
+
             super.onReceivedError(view, errorCode, description, failingUrl);
 
             // Note: errorCode corresponds to an ERROR_* constant in the range of ~ [-16,4]
