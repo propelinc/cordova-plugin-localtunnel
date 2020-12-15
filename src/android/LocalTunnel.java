@@ -1390,7 +1390,7 @@ public class LocalTunnel extends CordovaPlugin {
      * @param status the status code to return to the JavaScript environment
      */
     public void sendRequestDone(int status, String statusText) {
-        if (status >= 200 && status < 400) {
+        if (status >= 100 && status < 600) {
             try {
                 org.json.JSONObject obj = new JSONObject();
                 obj.put("type", HTTP_REQUEST_DONE);
