@@ -87,6 +87,8 @@ import java.util.List;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import java.util.StringTokenizer;
 import java.util.stream.Collectors;
 
@@ -126,6 +128,9 @@ public class LocalTunnel extends CordovaPlugin {
     private static final String FOOTER = "footer";
     private static final String FOOTER_COLOR = "footercolor";
 
+    // Default pattern will not match any URLs 
+    private static final String DEFAULT_REQUEST_BLOCK_PATTERN = "(?!)";
+
     private static final List customizableOptions = Arrays.asList(CLOSE_BUTTON_CAPTION, TOOLBAR_COLOR, NAVIGATION_COLOR, CLOSE_BUTTON_COLOR, FOOTER_COLOR);
 
     private LocalTunnelDialog dialog;
@@ -158,6 +163,7 @@ public class LocalTunnel extends CordovaPlugin {
     protected String requestUrl = null;
     protected String lastRequestUrl = null;
     protected boolean enableRequestBlocking = false;
+    protected Pattern requestBlockPattern = Pattern.compile(DEFAULT_REQUEST_BLOCK_PATTERN);
 
     /**
      * Executes the request and returns PluginResult.
@@ -1184,8 +1190,10 @@ public class LocalTunnel extends CordovaPlugin {
         lastRequestUrl = url;
         openWindowHidden = true;
         enableRequestBlocking = requestOptions.getBoolean("enable_request_blocking");
-
-        LOG.d(LOG_TAG, "makeHttpRequest called: " + url + ", enableRequestBlocking: " + enableRequestBlocking);
+        String passedFileExtensions = requestOptions.optString("file_extensions_to_block", "");
+        requestBlockPattern = getRequestBlockPattern(passedFileExtensions);
+        
+        LOG.d(LOG_TAG, "makeHttpRequest called: " + url + ", passedFileExtensions: " + passedFileExtensions + ", enableRequestBlocking: " + enableRequestBlocking);
 
         if (features != null) {
             String hidden = features.get(HIDDEN);
@@ -1362,6 +1370,40 @@ public class LocalTunnel extends CordovaPlugin {
     }
 
     /**
+     * Generate a regex pattern to match URLs with specific file extensions.
+     *
+     * @param extensions comma seperated list of file extensions
+     */
+    protected Pattern getRequestBlockPattern(String extensions) {
+        Pattern result;
+        if (!extensions.isEmpty()) {
+            String[] fileExtensions = extensions.split(",");
+            StringBuilder patternBuilder = new StringBuilder();
+            patternBuilder.append("(.+)(");
+
+            for (int i = 0; i < fileExtensions.length; i++) {
+                patternBuilder.append("\\.");
+                patternBuilder.append(fileExtensions[i]);
+                if (i < fileExtensions.length - 1) {
+                    patternBuilder.append("|");
+                }
+            }
+            patternBuilder.append(")(\\?.*)?");
+
+            try {
+                result = Pattern.compile(patternBuilder.toString() , Pattern.CASE_INSENSITIVE);
+            }
+            catch (PatternSyntaxException ex) {
+                LOG.e(LOG_TAG, "Failed to compile request blocking pattern for extensions: " + extensions, ex);
+                result = Pattern.compile(DEFAULT_REQUEST_BLOCK_PATTERN);
+            }
+        } else {
+            result = Pattern.compile(DEFAULT_REQUEST_BLOCK_PATTERN);
+        }
+        return result;
+    }
+
+    /**
      * Create a new plugin success result and send it back to JavaScript
      *
      * @param obj a JSONObject contain event payload information
@@ -1489,7 +1531,7 @@ public class LocalTunnel extends CordovaPlugin {
             LOG.d(LOG_TAG, "INSPECTING REQUEST in shouldInterceptRequest(). requestUrl: " + requestUrl + ". url: " + url + ". enableRequestBlocking: " + enableRequestBlocking);
 
             try {
-                if (enableRequestBlocking && !requestUrl.equals(url)) {
+                if ((enableRequestBlocking && !requestUrl.equals(url)) || isBlockedByPattern(url)) {
                     LOG.d(LOG_TAG, "REQUEST BLOCKED: " + url);
                     InputStream data = new ByteArrayInputStream("REQUEST BLOCKED".getBytes("UTF-8"));
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
@@ -1505,6 +1547,18 @@ public class LocalTunnel extends CordovaPlugin {
                 LOG.e(LOG_TAG, "Should never happen", ex);
             }
             return super.shouldInterceptRequest(webView, url);
+        }
+
+        /**
+         * Determine if a URL should be blocked based on request blocking pattern.
+         *
+         * @param url
+         */
+        protected boolean isBlockedByPattern(String url) {
+            if (url != null) {
+                return requestBlockPattern.matcher(url).find();
+            }
+            return false;
         }
 
         /**
