@@ -1390,13 +1390,14 @@ public class LocalTunnel extends CordovaPlugin {
      * @param status the status code to return to the JavaScript environment
      */
     public void sendRequestDone(int status, String statusText) {
-        if (status >= 200 && status < 400) {
+        if (status >= 100 && status < 600) {
             try {
                 org.json.JSONObject obj = new JSONObject();
                 obj.put("type", HTTP_REQUEST_DONE);
                 String cookies = CookieManager.getInstance().getCookie(requestUrl);
                 obj.put("cookies", cookies);
                 obj.put("url", requestUrl);
+                obj.put("status", status);
                 sendUpdate(obj, true);
             } catch (JSONException ex) {
                 LOG.e(LOG_TAG, "Should never happen", ex);
@@ -1662,6 +1663,10 @@ public class LocalTunnel extends CordovaPlugin {
 
             LOG.d(LOG_TAG, "PAGE FINISHED: " + url);
             if (url.equals(requestUrl)) {
+                // Note: Android APIs don't give us a way to access the real HTTP response code, so
+                // in this case we always return 200. It may be possible to get the real status code
+                // only for >= 400 and only in API Level >= 23.
+                // https://stackoverflow.com/questions/11889020/get-http-status-code-in-android-webview
                 sendRequestDone(200, "");
                 requestUrl = null;
                 enableRequestBlocking = false;
@@ -1684,6 +1689,9 @@ public class LocalTunnel extends CordovaPlugin {
 
         public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
             super.onReceivedError(view, errorCode, description, failingUrl);
+
+            // Note: errorCode corresponds to an ERROR_* constant in the range of ~ [-16,4]
+            // https://developer.android.com/reference/android/webkit/WebViewClient#constants_1
             sendRequestDone(errorCode, description);
         }
 
