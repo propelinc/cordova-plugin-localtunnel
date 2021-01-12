@@ -167,7 +167,7 @@ protocol WebViewPropagateDelegate {
         if self.webViewController == nil  && self.requestOptions != nil{
             self.webViewController = WebViewViewController()
             self.webViewController?.propagateDelegate = self;
-            self.webViewController?.createWebView(self.requestOptions!, completionHander: runOpen)
+            self.webViewController?.createWebView(self.requestOptions!, completionHandler: runOpen)
         } else if self.requestOptions != nil {
             self.webViewController?.updateWebView(self.requestOptions!, completionHandler: runOpen)
         }
@@ -183,6 +183,19 @@ protocol WebViewPropagateDelegate {
         self.webDriverSession = false
         self.hideWebView()
         self.webViewController?.close()
+    }
+
+    @objc(getAllCookies:)
+    func getAllCookies(command: CDVInvokedUrlCommand) {
+        print("Running get all cookies")
+        self.webViewController?.getCookies { cookies in
+            print("Current Cookies in WKWebview \(cookies)")
+            let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: [
+                    "type": "cookies",
+                    "cookies": convertCookiesToString(cookies)
+                ])
+                self.commandDelegate.send(pluginResult, callbackId: command.callbackId)
+            }
     }
 
     @objc(injectScriptCode:)
@@ -321,6 +334,9 @@ protocol WebViewPropagateDelegate {
     }
 
     func webViewControllerDidClose() {
+        // Ensure no more references to the webViewController
+        // https://docs.swift.org/swift-book/LanguageGuide/Deinitialization.html
+        self.webViewController?.propagateDelegate = nil
         self.webViewController = nil
 
         let pluginResult = CDVPluginResult(status:CDVCommandStatus_OK, messageAs: ["type": "exit"])
@@ -449,7 +465,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
         fatalError("init(coder:) has not been implemented")
     }
 
-    private func createWebViewWithConfiguration(_ requestOptions: RequestOptions, _ webConfiguration: WKWebViewConfiguration, _ completionHander: () -> Void) {
+    private func createWebViewWithConfiguration(_ requestOptions: RequestOptions, _ webConfiguration: WKWebViewConfiguration, _ completionHandler: () -> Void) {
         let webViewBounds = self.view.bounds;
         self.webView = WKWebView(frame: webViewBounds, configuration: webConfiguration)
         self.webView.uiDelegate = self
@@ -465,7 +481,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
         // https://github.com/apache/cordova-plugin-inappbrowser/blob/3.2.x/src/ios/CDVWKInAppBrowser.m#L789
         self.webView.clearsContextBeforeDrawing = true
         self.webView.clipsToBounds = true
-        self.webView.contentMode = UIViewContentMode.scaleToFill
+        self.webView.contentMode = UIView.ContentMode.scaleToFill
         self.webView.isMultipleTouchEnabled = true
         self.webView.isOpaque = true
         self.webView.isUserInteractionEnabled = true
@@ -474,22 +490,31 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
         self.webView.allowsBackForwardNavigationGestures = false;
         // Copied from inappbrowser
 
-        completionHander()
+        completionHandler()
     }
 
-    func createWebView(_ requestOptions: RequestOptions, completionHander: @escaping () -> Void) {
+    func createWebView(_ requestOptions: RequestOptions, completionHandler: @escaping () -> Void) {
         let webConfiguration = WKWebViewConfiguration()
+        // Note: (Alex 01/12/2021)
+        // Setting up a non persistent store is needed in order to allow us to consistently access all
+        // tokens that are written to the store. I am not sure if the main cause is that this store
+        // is different than the store that cordova's wkwebview uses or that this store is in memoryl
+        // instead of on disk which means it might be faster and thus less likely to fall prey to race
+        // conditions. Either way, please don't change this code!
+        // https://developer.apple.com/documentation/webkit/wkwebsitedatastore
+        let webStore = WKWebsiteDataStore.nonPersistent()
+        webConfiguration.websiteDataStore = webStore
 
         if (requestOptions.blockNonEssentialRequests) {
             WKContentRuleListStore.default()?.compileContentRuleList(forIdentifier: "block_rules", encodedContentRuleList:self.blockRules , completionHandler: {contentRuleList, error in
                 if contentRuleList != nil {
                     webConfiguration.userContentController.add(contentRuleList!)
                 }
-                self.createWebViewWithConfiguration(requestOptions, webConfiguration, completionHander)
+                self.createWebViewWithConfiguration(requestOptions, webConfiguration, completionHandler)
             })
 
         } else {
-            self.createWebViewWithConfiguration(requestOptions, webConfiguration, completionHander)
+            self.createWebViewWithConfiguration(requestOptions, webConfiguration, completionHandler)
         }
     }
 
@@ -510,6 +535,14 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
 
     func close() {
         let postDismiss = {
+            // Ensuring we don't leave any circular references
+            // https://docs.swift.org/swift-book/LanguageGuide/Deinitialization.html
+            self.webView.uiDelegate = nil
+            self.webView.navigationDelegate = nil
+            self.webView = nil
+            for view in self.view.subviews {
+                view.removeFromSuperview()
+            }
             self.propagateDelegate.webViewControllerDidClose()
         }
 
@@ -528,9 +561,15 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
         self.webView.load(request);
     }
 
+    // Note: (Alex 01/12/2021) See comment in createWebView. Now that we are setting up the store
+    // properly, WKWebview we are not havving issues with loading the cookies from HTTPCookieStore.
+    // That means that we could probably refactor the code below to just use the self.webView. We
+    // would still need to check on if cookies on redirects are working properly first.
+    //
+    //
     // WKWebview does not do a great job handling cookies
     //  * It does not set cookies on redirect
-    //  * It does not always propagate the document.cookie object up to HTTPCookieStore
+    //  *̶ ̶I̶t̶ ̶d̶o̶e̶s̶ ̶n̶o̶t̶ ̶a̶l̶w̶a̶y̶s̶ ̶p̶r̶o̶p̶a̶g̶a̶t̶e̶ ̶t̶h̶e̶ ̶d̶o̶c̶u̶m̶e̶n̶t̶.̶c̶o̶o̶k̶i̶e̶ ̶o̶b̶j̶e̶c̶t̶ ̶u̶p̶ ̶t̶o̶ ̶H̶T̶T̶P̶C̶o̶o̶k̶i̶e̶S̶t̶o̶r̶e̶ (modified 01/12/2021)
     //
     // This function uses urlSession to make all requests and update cookies properly.
     // Once the request has succeeded, the response is loaded into the WKWebview. This
@@ -644,10 +683,15 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
     // having to worry about clobbering the user's cookies in another app or in
     // their web browser
 
-    func clearCookies(completionHander: @escaping () -> Void){
+    func clearCookies(completionHandler: @escaping () -> Void){
+        if self.webView == nil {
+            completionHandler()
+            return;
+        }
+
         DispatchQueue.main.async {
             self.webView.configuration.websiteDataStore.httpCookieStore.getAllCookies({cookies in
-                self.recursiveClearCookies(cookies: cookies, completionHandler: completionHander)
+                self.recursiveClearCookies(cookies: cookies, completionHandler: completionHandler)
             })
         }
     }
@@ -663,37 +707,53 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
     }
 
     func setCookies(cookies: [HTTPCookie], completionHandler: @escaping () -> Void) {
-        if cookies.count == 0 {
+        if cookies.count == 0 || self.webView == nil {
             completionHandler()
-        } else {
-            DispatchQueue.main.async {
-                self.webView.configuration.websiteDataStore.httpCookieStore.setCookie(cookies[0], completionHandler: {
-                    self.setCookies(cookies: Array(cookies[1...]), completionHandler: completionHandler)
-                })
-            }
+            return
+        }
+
+        DispatchQueue.main.async {
+            self.webView.configuration.websiteDataStore.httpCookieStore.setCookie(cookies[0], completionHandler: {
+                self.setCookies(cookies: Array(cookies[1...]), completionHandler: completionHandler)
+            })
         }
     }
 
-    func printCookies(completionHander: @escaping () -> Void) {
+    func printCookies(completionHandler: @escaping () -> Void) {
+        if self.webView == nil {
+            completionHandler()
+            return;
+        }
+
         DispatchQueue.main.async {
             self.webView.configuration.websiteDataStore.httpCookieStore.getAllCookies({cookies in
                 for cookie in cookies {
                     print("Cookie: \(cookie)")
                 }
-                completionHander()
+                completionHandler()
             })
         }
     }
 
-    func getCookies(completionHander: @escaping ([HTTPCookie]) -> Void) {
+    func getCookies(completionHandler: @escaping ([HTTPCookie]) -> Void) {
+        if self.webView == nil {
+            completionHandler([])
+            return;
+        }
+
         DispatchQueue.main.async {
             self.webView.configuration.websiteDataStore.httpCookieStore.getAllCookies({cookies in
-                completionHander(cookies)
+                completionHandler(cookies)
             })
         }
     }
 
     func getCookiesForUrl(_ url: String, completionHandler: @escaping ([HTTPCookie]) -> Void) {
+        if self.webView == nil {
+            completionHandler([])
+            return;
+        }
+
         DispatchQueue.main.async {
             self.webView.configuration.websiteDataStore.httpCookieStore.getAllCookies({cookies in
                 var returnCookies: [HTTPCookie] = []
@@ -798,7 +858,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
     }
 
     //////////////////////////////////////////
-    // WKNavigationDelegate Methods Start   //
+    // WKNavigationDelegate Methods End   //
     //////////////////////////////////////////
 
 
