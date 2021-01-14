@@ -617,7 +617,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
             let cookieDict = HTTPCookie.requestHeaderFields(with: requestCookies)
             request.addValue(cookieDict["Cookie"] ?? "", forHTTPHeaderField: "Cookie")
 
-            let task = self.urlSession.dataTask(with: request) { (data, response, error) in
+            let handleResponse = { (data: Data?, response: URLResponse?, error: Error?) in
                 if error == nil {
                     let statusCode = (response as! HTTPURLResponse).statusCode
                     let headers = (response as! HTTPURLResponse).allHeaderFields
@@ -662,7 +662,11 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
                     completionHandler(nil, nil, nil, error as? URLError ?? defaultError)
                 }
             }
-            task.resume()
+
+            let task = self.urlSession.dataTask(with: request, completionHandler:handleResponse)
+            // We need to make sure that the cookies we are requesting with our in the HTTPCookieStore.
+            // If not, we will not return them properly after the request is completed
+            self.setCookies(cookies: requestCookies, completionHandler: task.resume)
         })
     }
 
