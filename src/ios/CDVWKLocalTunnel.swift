@@ -495,10 +495,10 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
 
     func createWebView(_ requestOptions: RequestOptions, completionHandler: @escaping () -> Void) {
         let webConfiguration = WKWebViewConfiguration()
-        // Note: (Alex 01/12/2021)
+        // Note(Alex): 01/12/2021
         // Setting up a non persistent store is needed in order to allow us to consistently access all
         // tokens that are written to the store. I am not sure if the main cause is that this store
-        // is different than the store that cordova's wkwebview uses or that this store is in memoryl
+        // is different than the store that cordova's wkwebview uses or that this store is in memory
         // instead of on disk which means it might be faster and thus less likely to fall prey to race
         // conditions. Either way, please don't change this code!
         // https://developer.apple.com/documentation/webkit/wkwebsitedatastore
@@ -561,10 +561,10 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
         self.webView.load(request);
     }
 
-    // Note: (Alex 01/12/2021) See comment in createWebView. Now that we are setting up the store
-    // properly, WKWebview we are not havving issues with loading the cookies from HTTPCookieStore.
+    // Note(Alex): 01/12/2021 See comment in createWebView. Now that we are setting up the store
+    // properly, WKWebview is not havving issues with loading the cookies from HTTPCookieStore.
     // That means that we could probably refactor the code below to just use the self.webView. We
-    // would still need to check on if cookies on redirects are working properly first.
+    // would still need to check if cookies on redirects are working properly.
     //
     //
     // WKWebview does not do a great job handling cookies
@@ -664,8 +664,9 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
             }
 
             let task = self.urlSession.dataTask(with: request, completionHandler:handleResponse)
-            // We need to make sure that the cookies we are requesting with our in the HTTPCookieStore.
-            // If not, we will not return them properly after the request is completed
+            // We need to make sure that the cookies we are using for the request are in
+            // the HTTPCookieStore. If not, we will not return them properly after the request
+            // is completed.
             self.setCookies(cookies: requestCookies, completionHandler: task.resume)
         })
     }
