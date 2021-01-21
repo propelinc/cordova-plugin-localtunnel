@@ -542,7 +542,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
     private func getBlockRulesForOptions(requestOptions: RequestOptions) -> String {
         if (requestOptions.blockNonEssentialRequests) {
             return self.blockRules
-        } else if (!requestOptions.fileExtensionsToBlock.isEmpty && requestOptions.requestType != CAPTCHA_REQUEST) {
+        } else if (!requestOptions.fileExtensionsToBlock.isEmpty) {
             return getBlockRulesForFileExtensions(extensions: requestOptions.fileExtensionsToBlock)
         }
         return "[]"
