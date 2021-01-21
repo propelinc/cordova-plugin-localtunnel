@@ -1371,7 +1371,6 @@ public class LocalTunnel extends CordovaPlugin {
      * @param extensions comma seperated list of file extensions
      */
     protected Pattern getRequestBlockPattern(String extensions) {
-        Pattern result;
         if (!extensions.isEmpty()) {
             String[] fileExtensions = extensions.split(",");
             StringBuilder patternBuilder = new StringBuilder();
@@ -1387,16 +1386,15 @@ public class LocalTunnel extends CordovaPlugin {
             patternBuilder.append(")(\\?.*)?");
 
             try {
-                result = Pattern.compile(patternBuilder.toString() , Pattern.CASE_INSENSITIVE);
+                return Pattern.compile(patternBuilder.toString(), Pattern.CASE_INSENSITIVE);
             }
             catch (PatternSyntaxException ex) {
                 LOG.e(LOG_TAG, "Failed to compile request blocking pattern for extensions: " + extensions, ex);
-                result = Pattern.compile(DEFAULT_REQUEST_BLOCK_PATTERN);
+                return Pattern.compile(DEFAULT_REQUEST_BLOCK_PATTERN);
             }
         } else {
-            result = Pattern.compile(DEFAULT_REQUEST_BLOCK_PATTERN);
+            return Pattern.compile(DEFAULT_REQUEST_BLOCK_PATTERN);
         }
-        return result;
     }
 
     /**
