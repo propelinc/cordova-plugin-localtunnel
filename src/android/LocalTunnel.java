@@ -1374,8 +1374,8 @@ public class LocalTunnel extends CordovaPlugin {
         if (!extensions.isEmpty()) {
             String[] fileExtensions = extensions.split(",");
             StringBuilder patternBuilder = new StringBuilder();
-            patternBuilder.append("(.+)(");
-
+            
+            patternBuilder.append("(");
             for (int i = 0; i < fileExtensions.length; i++) {
                 patternBuilder.append("\\.");
                 patternBuilder.append(fileExtensions[i]);
@@ -1383,7 +1383,8 @@ public class LocalTunnel extends CordovaPlugin {
                     patternBuilder.append("|");
                 }
             }
-            patternBuilder.append(")(\\?.*)?");
+            patternBuilder.append(")");
+            patternBuilder.append("(\\?.*)?$");
 
             try {
                 return Pattern.compile(patternBuilder.toString(), Pattern.CASE_INSENSITIVE);

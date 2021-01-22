@@ -510,18 +510,12 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
         webConfiguration.websiteDataStore = webStore
 
         let rules = getBlockRulesForOptions(requestOptions: requestOptions)
-
-        if (!rules.isEmpty) {
-            WKContentRuleListStore.default()?.compileContentRuleList(forIdentifier: "block_rules", encodedContentRuleList: rules, completionHandler: {contentRuleList, error in
-                if contentRuleList != nil {
-                    webConfiguration.userContentController.add(contentRuleList!)
-                }
-                self.createWebViewWithConfiguration(requestOptions, webConfiguration, completionHandler)
-            })
-
-        } else {
+        WKContentRuleListStore.default()?.compileContentRuleList(forIdentifier: "block_rules", encodedContentRuleList: rules, completionHandler: {contentRuleList, error in
+            if contentRuleList != nil {
+                webConfiguration.userContentController.add(contentRuleList!)
+            }
             self.createWebViewWithConfiguration(requestOptions, webConfiguration, completionHandler)
-        }
+        })
     }
 
     func updateWebView(_ requestOptions: RequestOptions, completionHandler: @escaping () -> Void) {
@@ -529,7 +523,6 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
 
         let rules = getBlockRulesForOptions(requestOptions: requestOptions)
         WKContentRuleListStore.default()?.compileContentRuleList(forIdentifier: "block_rules", encodedContentRuleList: rules, completionHandler: {contentRuleList, error in
-
             self.webView.configuration.userContentController.removeAllContentRuleLists()
 
             if contentRuleList != nil {
@@ -558,7 +551,7 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
         for ext in extensions {
             blockRulesDict.append([
                 "trigger": [
-                    "url-filter": "(.+)(\\.\(ext))(\\?.*)?",
+                    "url-filter": "\\.\(ext)(\\?.*)?$",
                 ],
                 "action": [
                     "type": "block",
