@@ -30,6 +30,7 @@ let CAPTCHA_REQUEST = "_captcha"
 
 struct RequestOptions {
     var blockNonEssentialRequests: Bool
+    var fileExtensionsToBlock: [String]
     var displayWebview: Bool
     var isContentJSON: Bool
     var method: String
@@ -234,6 +235,8 @@ protocol WebViewPropagateDelegate {
         let displayWebview =  windowFeatures == "hidden=no" || passedHidden == false
 
         let passedBlock = passedOptions["enable_request_blocking"] as? Bool ?? false
+        let passedFileExtensions = passedOptions["file_extensions_to_block"] as? String ?? ""
+        let fileExtensionsToBlock = !passedFileExtensions.isEmpty ? passedFileExtensions.components(separatedBy: ",") : []
 
         let passedMethod = passedOptions["method"] as? String ?? "GET"
 
@@ -252,6 +255,7 @@ protocol WebViewPropagateDelegate {
 
         var requestOptions = RequestOptions(
             blockNonEssentialRequests: passedBlock,
+            fileExtensionsToBlock: fileExtensionsToBlock,
             displayWebview: displayWebview,
             isContentJSON: isContentJSON,
             method: passedMethod,
@@ -505,25 +509,20 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
         let webStore = WKWebsiteDataStore.nonPersistent()
         webConfiguration.websiteDataStore = webStore
 
-        if (requestOptions.blockNonEssentialRequests) {
-            WKContentRuleListStore.default()?.compileContentRuleList(forIdentifier: "block_rules", encodedContentRuleList:self.blockRules , completionHandler: {contentRuleList, error in
-                if contentRuleList != nil {
-                    webConfiguration.userContentController.add(contentRuleList!)
-                }
-                self.createWebViewWithConfiguration(requestOptions, webConfiguration, completionHandler)
-            })
-
-        } else {
+        let rules = getBlockRulesForOptions(requestOptions: requestOptions)
+        WKContentRuleListStore.default()?.compileContentRuleList(forIdentifier: "block_rules", encodedContentRuleList: rules, completionHandler: {contentRuleList, error in
+            if contentRuleList != nil {
+                webConfiguration.userContentController.add(contentRuleList!)
+            }
             self.createWebViewWithConfiguration(requestOptions, webConfiguration, completionHandler)
-        }
+        })
     }
 
     func updateWebView(_ requestOptions: RequestOptions, completionHandler: @escaping () -> Void) {
         self.webView.customUserAgent = requestOptions.userAgent
 
-        let rules = requestOptions.blockNonEssentialRequests == true ? self.blockRules : "[]"
-        WKContentRuleListStore.default()?.compileContentRuleList(forIdentifier: "block_rules", encodedContentRuleList:rules, completionHandler: {contentRuleList, error in
-
+        let rules = getBlockRulesForOptions(requestOptions: requestOptions)
+        WKContentRuleListStore.default()?.compileContentRuleList(forIdentifier: "block_rules", encodedContentRuleList: rules, completionHandler: {contentRuleList, error in
             self.webView.configuration.userContentController.removeAllContentRuleLists()
 
             if contentRuleList != nil {
@@ -531,6 +530,35 @@ class WebViewViewController: UIViewController, URLSessionTaskDelegate, WKNavigat
             }
             completionHandler()
         })
+    }
+
+    private func getBlockRulesForOptions(requestOptions: RequestOptions) -> String {
+        if (requestOptions.blockNonEssentialRequests) {
+            return self.blockRules
+        } else if (!requestOptions.fileExtensionsToBlock.isEmpty) {
+            return getBlockRulesForFileExtensions(extensions: requestOptions.fileExtensionsToBlock)
+        }
+        return "[]"
+    }
+
+    private func getBlockRulesForFileExtensions(extensions: [String]) -> String {
+        // Note (Jeff) 1/20/21 - the "url-filter" only supports a subset of regular expression functionality,
+        // not including the "logical or" operator (|). So  we need to build the rules one per per file extension
+        // at a time, rather than building one comprehesive regex. 
+        // ref: https://webkit.org/blog/3476/content-blockers-first-look/
+        var blockRulesDict: [[String: Any]] = []
+
+        for ext in extensions {
+            blockRulesDict.append([
+                "trigger": [
+                    "url-filter": "\\.\(ext)(\\?.*)?$",
+                ],
+                "action": [
+                    "type": "block",
+                ],
+            ])
+        }
+        return jsonDumps(blockRulesDict) ?? "[]"
     }
 
     func close() {
